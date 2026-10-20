@@ -1,0 +1,36 @@
+# Environments
+.venv/
+env/
+venv/
+ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Node / Frontend
+node_modules/
+.cache/
+!frontend/dist/
+
+# Secrets & Config
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# System
+.DS_Store
+*.log

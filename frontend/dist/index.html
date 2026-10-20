@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UK Working-Capital Intelligence & Prospect Scoring</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            slate: {
+              850: '#111827',
+              900: '#0f172a',
+              925: '#090d16',
+              950: '#030712'
+            },
+            fintech: {
+              primary: '#0ea5e9',
+              danger: '#ef4444',
+              warning: '#f59e0b',
+              success: '#10b981',
+              accent: '#6366f1'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .code-font { font-family: 'JetBrains Mono', monospace; }
+    /* Custom scrollbars */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #090d16; }
+    ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #334155; }
+  </style>
+</head>
+<body class="h-full flex flex-col overflow-hidden bg-slate-950 text-slate-200">
+
+  <!-- Top Navigation & Institution Bar -->
+  <header class="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between shrink-0">
+    <div class="flex items-center space-x-4">
+      <div class="flex items-center space-x-2">
+        <div class="w-8 h-8 rounded bg-sky-500/10 border border-sky-500/30 flex items-center justify-center font-bold text-sky-400 font-mono text-sm">
+          UK
+        </div>
+        <div>
+          <h1 class="text-sm font-semibold tracking-wide text-slate-100 flex items-center gap-2">
+            UK WORKING-CAPITAL INTELLIGENCE
+            <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">v1.0.0</span>
+          </h1>
+          <p class="text-xs text-slate-400">Commercial Credit, Corporate Filings & Workforce Expansion Scoring</p>
+        </div>
+      </div>
+      <div class="h-6 w-px bg-slate-800"></div>
+      <div id="mode-badge" class="px-2.5 py-1 rounded text-xs font-mono bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center gap-1.5">
+        <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+        DEMO & SIMULATION FIXTURES ACTIVE
+      </div>
+    </div>
+
+    <!-- Provider Health Status Pills -->
+    <div class="flex items-center space-x-3 text-xs">
+      <div id="provider-badges" class="flex items-center space-x-2">
+        <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">Loading integrations...</span>
+      </div>
+      <button onclick="refreshData()" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-medium text-xs flex items-center gap-1 transition">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+        Refresh
+      </button>
+    </div>
+  </header>
+
+  <!-- Metric Strip -->
+  <section class="bg-slate-925 border-b border-slate-800/80 px-6 py-3 shrink-0">
+    <div class="grid grid-cols-2 md:grid-cols-6 gap-4 text-xs">
+      <div class="bg-slate-900/60 p-3 rounded border border-slate-800">
+        <div class="text-slate-400 uppercase tracking-wider font-mono text-[10px]">Monitored Entities</div>
+        <div id="metric-total-companies" class="text-xl font-bold font-mono text-slate-100 mt-1">-</div>
+        <div class="text-[10px] text-slate-500 mt-0.5">Companies House Registry</div>
+      </div>
+      <div class="bg-slate-900/60 p-3 rounded border border-slate-800">
+        <div class="text-slate-400 uppercase tracking-wider font-mono text-[10px]">Detected Signals (30d)</div>
+        <div id="metric-signals-30d" class="text-xl font-bold font-mono text-sky-400 mt-1">-</div>
+        <div class="text-[10px] text-slate-500 mt-0.5">MR04, DBT, Headcount</div>
+      </div>
+      <div class="bg-slate-900/60 p-3 rounded border border-slate-800">
+        <div class="text-slate-400 uppercase tracking-wider font-mono text-[10px]">High Priority (75-100)</div>
+        <div id="metric-strong-prospects" class="text-xl font-bold font-mono text-rose-400 mt-1">-</div>
+        <div class="text-[10px] text-slate-500 mt-0.5">Strong Corroboration</div>
+      </div>
+      <div class="bg-slate-900/60 p-3 rounded border border-slate-800">
+        <div class="text-slate-400 uppercase tracking-wider font-mono text-[10px]">Elevated (50-74)</div>
+        <div id="metric-elevated-prospects" class="text-xl font-bold font-mono text-amber-400 mt-1">-</div>
+        <div class="text-[10px] text-slate-500 mt-0.5">Multi-source indicators</div>
+      </div>
+      <div class="bg-slate-900/60 p-3 rounded border border-slate-800">
+        <div class="text-slate-400 uppercase tracking-wider font-mono text-[10px]">Awaiting Broker Review</div>
+        <div id="metric-awaiting-review" class="text-xl font-bold font-mono text-indigo-400 mt-1">-</div>
+        <div class="text-[10px] text-slate-500 mt-0.5">Unreviewed high priority</div>
+      </div>
+      <div class="bg-slate-900/60 p-3 rounded border border-slate-800">
+        <div class="text-slate-400 uppercase tracking-wider font-mono text-[10px]">Ambiguous Matches</div>
+        <div id="metric-unresolved-matches" class="text-xl font-bold font-mono text-emerald-400 mt-1">-</div>
+        <div class="text-[10px] text-slate-500 mt-0.5">Resolution review queue</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main Workspace Tabs -->
+  <div class="bg-slate-900 border-b border-slate-800 px-6 flex items-center space-x-6 text-xs font-medium">
+    <button onclick="switchTab('prospects')" id="tab-btn-prospects" class="py-3 border-b-2 border-sky-500 text-sky-400 flex items-center gap-2">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+      Prioritised Prospects
+    </button>
+    <button onclick="switchTab('entity-review')" id="tab-btn-entity-review" class="py-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path></svg>
+      Entity Resolution Queue
+      <span id="tab-count-entity" class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-800 text-slate-300">0</span>
+    </button>
+    <button onclick="switchTab('integrations')" id="tab-btn-integrations" class="py-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+      Integrations & Health
+    </button>
+  </div>
+
+  <!-- Content Areas -->
+  <main class="flex-1 overflow-hidden relative">
+
+    <!-- TAB 1: PROSPECT TABLE & FILTERS -->
+    <div id="tab-prospects" class="h-full flex flex-col">
+      <!-- Filter Bar -->
+      <div class="bg-slate-925 border-b border-slate-800 px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div class="flex items-center space-x-3 flex-1 min-w-[280px]">
+          <div class="relative flex-1 max-w-sm">
+            <input type="text" id="filter-search" oninput="applyFilters()" placeholder="Search by Company Name or UK CRN..." class="w-full bg-slate-900 border border-slate-700/80 rounded px-3 py-1.5 pl-8 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono">
+            <svg class="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+          </div>
+          
+          <select id="filter-band" onchange="applyFilters()" class="bg-slate-900 border border-slate-700/80 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500">
+            <option value="">All Score Bands</option>
+            <option value="strong">Strong Indicators (75-100)</option>
+            <option value="elevated">Elevated Indicators (50-74)</option>
+            <option value="emerging">Emerging Indicators (25-49)</option>
+            <option value="limited">Limited Signals (0-24)</option>
+          </select>
+
+          <select id="filter-review" onchange="applyFilters()" class="bg-slate-900 border border-slate-700/80 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500">
+            <option value="">All Review Statuses</option>
+            <option value="unreviewed">Unreviewed</option>
+            <option value="in_review">In Review</option>
+            <option value="verified_opportunity">Verified Opportunity</option>
+            <option value="suppressed">Suppressed</option>
+            <option value="snoozed">Snoozed</option>
+          </select>
+
+          <select id="filter-coverage" onchange="applyFilters()" class="bg-slate-900 border border-slate-700/80 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500">
+            <option value="">All Evidence Coverage</option>
+            <option value="strong">Strong Coverage (3+ sources)</option>
+            <option value="elevated">Elevated Coverage (2 sources)</option>
+            <option value="emerging">Emerging Coverage</option>
+          </select>
+        </div>
+
+        <div class="flex items-center space-x-2 text-slate-400">
+          <span id="prospects-count-display">0 prospects found</span>
+        </div>
+      </div>
+
+      <!-- Prospect Data Table -->
+      <div class="flex-1 overflow-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead class="bg-slate-900/90 sticky top-0 border-b border-slate-800 text-slate-400 font-mono text-[11px] uppercase tracking-wider">
+            <tr>
+              <th class="py-2.5 px-4 font-semibold">Company / CRN</th>
+              <th class="py-2.5 px-3 font-semibold">Strain Score</th>
+              <th class="py-2.5 px-3 font-semibold">Band</th>
+              <th class="py-2.5 px-3 font-semibold">Primary Observed Signals</th>
+              <th class="py-2.5 px-3 font-semibold">Latest Signal</th>
+              <th class="py-2.5 px-3 font-semibold">Coverage</th>
+              <th class="py-2.5 px-3 font-semibold">Review Status</th>
+              <th class="py-2.5 px-3 font-semibold">Owner / Broker</th>
+              <th class="py-2.5 px-4 text-right font-semibold">Action</th>
+            </tr>
+          </thead>
+          <tbody id="prospects-table-body" class="divide-y divide-slate-800/60 font-sans">
+            <tr><td colspan="9" class="p-8 text-center text-slate-500 font-mono">Loading prioritised prospects...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB 2: ENTITY RESOLUTION QUEUE -->
+    <div id="tab-entity-review" class="h-full flex flex-col hidden p-6 overflow-auto">
+      <div class="max-w-5xl mx-auto w-full">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-base font-bold text-slate-100">Canonical Entity Resolution Review Queue</h2>
+            <p class="text-xs text-slate-400 mt-0.5">Ambiguous matches (similarity 0.65 - 0.89) requiring deterministic human review to prevent erroneous merges.</p>
+          </div>
+          <span class="text-xs font-mono text-slate-400 bg-slate-900 px-3 py-1 rounded border border-slate-800">CRN is authoritative UK key</span>
+        </div>
+
+        <div id="entity-review-list" class="space-y-3">
+          <div class="p-8 text-center text-slate-500 font-mono">Loading pending entity matches...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3: INTEGRATIONS & HEALTH -->
+    <div id="tab-integrations" class="h-full flex flex-col hidden p-6 overflow-auto">
+      <div class="max-w-5xl mx-auto w-full space-y-6">
+        <div>
+          <h2 class="text-base font-bold text-slate-100">Signal Integrations & Diagnostic Matrix</h2>
+          <p class="text-xs text-slate-400 mt-0.5">Real-time status of commercial credit, filing streams, and workforce provider adapters.</p>
+        </div>
+
+        <div id="integrations-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Filled dynamically -->
+        </div>
+
+        <!-- Dead Letter Queue Section -->
+        <div class="bg-slate-900 border border-slate-800 rounded p-4">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+              <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider font-mono">Dead-Letter Queue (DLQ)</h3>
+              <span id="dlq-count" class="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-300">0 events</span>
+            </div>
+            <button onclick="pollChargesStream()" class="px-2.5 py-1 rounded bg-sky-600 hover:bg-sky-500 text-white font-mono text-xs transition">
+              Poll Companies House Stream
+            </button>
+          </div>
+          <div class="text-xs text-slate-400 mb-3">Unparseable or repeatedly failing events isolated from main pipeline.</div>
+          <div id="dlq-table-container" class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-950 text-slate-500 font-mono text-[10px] uppercase">
+                <tr><th class="p-2">ID</th><th class="p-2">Provider</th><th class="p-2">Error Detail</th><th class="p-2">Payload Preview</th></tr>
+              </thead>
+              <tbody id="dlq-table-body" class="divide-y divide-slate-800 text-slate-300 font-mono text-[11px]">
+                <tr><td colspan="4" class="p-4 text-center text-slate-500">DLQ is clean. No dropped events.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- MODAL: COMPANY INTELLIGENCE PROFILE & BROKER WORKFLOW -->
+  <div id="profile-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-lg shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden">
+      <!-- Modal Header -->
+      <div class="px-6 py-4 bg-slate-925 border-b border-slate-800 flex items-start justify-between shrink-0">
+        <div>
+          <div class="flex items-center gap-3">
+            <h2 id="modal-company-name" class="text-lg font-bold text-slate-100">Company Intelligence Profile</h2>
+            <span id="modal-crn-badge" class="px-2 py-0.5 rounded text-xs font-mono bg-sky-500/10 text-sky-400 border border-sky-500/30">CRN 00000000</span>
+            <span id="modal-status-badge" class="px-2 py-0.5 rounded text-xs font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">ACTIVE</span>
+            <span id="modal-synthetic-badge" class="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/30">SYNTHETIC FIXTURE</span>
+          </div>
+          <div class="text-xs text-slate-400 mt-1 flex items-center gap-4">
+            <span id="modal-address">Registered Office: -</span>
+            <span id="modal-sic">SIC: -</span>
+          </div>
+        </div>
+        <button onclick="closeProfileModal()" class="text-slate-400 hover:text-slate-200 p-1 rounded hover:bg-slate-800 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <!-- Modal Body (Scrollable) -->
+      <div class="flex-1 overflow-y-auto p-6 space-y-6 text-xs">
+        
+        <!-- Top Score & 4 Pillars Strip -->
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+          <div class="bg-slate-950 p-4 rounded border border-slate-800 flex flex-col justify-center items-center text-center">
+            <div class="text-[10px] uppercase font-mono text-slate-400">Liquidity Strain Score</div>
+            <div id="modal-score-value" class="text-3xl font-extrabold font-mono text-rose-400 my-1">--</div>
+            <div id="modal-score-band" class="px-2 py-0.5 rounded text-[10px] font-mono uppercase bg-rose-500/20 text-rose-300">STRONG</div>
+            <div id="modal-score-coverage" class="text-[10px] text-slate-500 mt-1">Coverage: Strong</div>
+          </div>
+
+          <div class="bg-slate-950 p-3 rounded border border-slate-800 flex flex-col justify-between">
+            <div class="text-[10px] uppercase font-mono text-slate-400">1. Financing Changes</div>
+            <div class="flex items-baseline justify-between mt-1">
+              <span id="modal-pillar-1" class="text-lg font-bold font-mono text-slate-100">0.0</span>
+              <span class="text-[10px] text-slate-500 font-mono">/ 25 pts</span>
+            </div>
+            <p class="text-[10px] text-slate-400 mt-1">MR04 Charge satisfactions, releases & facility timing.</p>
+          </div>
+
+          <div class="bg-slate-950 p-3 rounded border border-slate-800 flex flex-col justify-between">
+            <div class="text-[10px] uppercase font-mono text-slate-400">2. Credit & Payment Risk</div>
+            <div class="flex items-baseline justify-between mt-1">
+              <span id="modal-pillar-2" class="text-lg font-bold font-mono text-slate-100">0.0</span>
+              <span class="text-[10px] text-slate-500 font-mono">/ 35 pts</span>
+            </div>
+            <p class="text-[10px] text-slate-400 mt-1">Supplier Days Beyond Terms (DBT) & credit rating trends.</p>
+          </div>
+
+          <div class="bg-slate-950 p-3 rounded border border-slate-800 flex flex-col justify-between">
+            <div class="text-[10px] uppercase font-mono text-slate-400">3. Workforce Expansion</div>
+            <div class="flex items-baseline justify-between mt-1">
+              <span id="modal-pillar-3" class="text-lg font-bold font-mono text-slate-100">0.0</span>
+              <span class="text-[10px] text-slate-500 font-mono">/ 20 pts</span>
+            </div>
+            <p class="text-[10px] text-slate-400 mt-1">90d headcount growth % & fixed payroll burn pressure.</p>
+          </div>
+
+          <div class="bg-slate-950 p-3 rounded border border-slate-800 flex flex-col justify-between">
+            <div class="text-[10px] uppercase font-mono text-slate-400">4. Corroboration</div>
+            <div class="flex items-baseline justify-between mt-1">
+              <span id="modal-pillar-4" class="text-lg font-bold font-mono text-slate-100">0.0</span>
+              <span class="text-[10px] text-slate-500 font-mono">/ 20 pts</span>
+            </div>
+            <p class="text-[10px] text-slate-400 mt-1">Cross-source confirmation across independent registries.</p>
+          </div>
+        </div>
+
+        <!-- Point-in-Time Verified Feature Matrix (With Strict DBT vs DSO Notice) -->
+        <div class="bg-slate-950 p-4 rounded border border-slate-800">
+          <div class="flex items-center justify-between mb-3 border-b border-slate-800/80 pb-2">
+            <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider font-mono flex items-center gap-2">
+              <span>Point-In-Time Derived Feature State</span>
+              <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-normal">Audit Protected</span>
+            </h3>
+            <span class="text-[10px] text-slate-500 font-mono">No Future Data Leakage</span>
+          </div>
+
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <div class="text-slate-500 text-[10px] font-mono">Days Beyond Terms (DBT)</div>
+              <div id="feat-dbt" class="text-sm font-bold font-mono text-slate-200 mt-0.5">--</div>
+              <div id="feat-dbt-trend" class="text-[10px] text-slate-400">Trend: --</div>
+            </div>
+            <div>
+              <div class="text-slate-500 text-[10px] font-mono">Days Sales Outstanding (DSO)</div>
+              <div id="feat-dso" class="text-sm font-bold font-mono text-slate-400 mt-0.5">Unobserved</div>
+              <div class="text-[10px] text-amber-400/90 leading-tight mt-0.5">DBT measures supplier delay, not customer collections</div>
+            </div>
+            <div>
+              <div class="text-slate-500 text-[10px] font-mono">Charge Satisfaction Recency</div>
+              <div id="feat-charge-recency" class="text-sm font-bold font-mono text-slate-200 mt-0.5">--</div>
+              <div id="feat-charge-scope" class="text-[10px] text-slate-400">Scope: --</div>
+            </div>
+            <div>
+              <div class="text-slate-500 text-[10px] font-mono">90-Day Headcount Dynamics</div>
+              <div id="feat-headcount-growth" class="text-sm font-bold font-mono text-slate-200 mt-0.5">--</div>
+              <div id="feat-headcount-conf" class="text-[10px] text-slate-400">Spacing Conf: --</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI Grounded Summary & Recommended Verification Prompts -->
+        <div class="bg-slate-950 p-4 rounded border border-slate-800">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-xs font-bold text-sky-400 uppercase tracking-wider font-mono flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              Evidence-Grounded Intelligence Summary
+            </h3>
+            <span id="modal-ai-model" class="text-[10px] font-mono text-slate-500 bg-slate-900 px-2 py-0.5 rounded border border-slate-800">Schema-Constrained</span>
+          </div>
+          <p id="modal-ai-reasoning" class="text-slate-300 leading-relaxed bg-slate-900/60 p-3 rounded border border-slate-800/80 mb-3">
+            Loading evidence summary...
+          </p>
+
+          <!-- Recommended Broker Actions -->
+          <div class="mt-3">
+            <h4 class="text-[11px] font-bold text-slate-300 font-mono uppercase mb-2">Recommended Next Investigative Actions (Sales / Underwriting Guidance):</h4>
+            <div id="modal-verification-steps" class="space-y-2">
+              <!-- Steps populated dynamically -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Signals Provenance Timeline Table -->
+        <div class="bg-slate-950 p-4 rounded border border-slate-800">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider font-mono">Stored Evidence Provenance & Filings</h3>
+            <span class="text-[10px] text-slate-500 font-mono">Direct Source Traces</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-900 text-slate-400 font-mono text-[10px] uppercase">
+                <tr>
+                  <th class="p-2">Signal Type</th>
+                  <th class="p-2">Provider</th>
+                  <th class="p-2">Observation Date</th>
+                  <th class="p-2">Value / Description</th>
+                  <th class="p-2">Evidence Reference</th>
+                  <th class="p-2">Status</th>
+                </tr>
+              </thead>
+              <tbody id="modal-signals-table" class="divide-y divide-slate-800 text-slate-300">
+                <!-- Populated dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Broker Review & Disposition Form -->
+        <div class="bg-slate-925 p-4 rounded border border-slate-700">
+          <h3 class="text-xs font-bold text-slate-100 uppercase tracking-wider font-mono mb-3">Broker Disposition & Verification Logging</h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+            <div>
+              <label class="block text-[10px] font-mono text-slate-400 mb-1">Review Disposition</label>
+              <select id="review-status-select" class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500">
+                <option value="in_review">In Review / Outreach Qualification</option>
+                <option value="verified_opportunity">Verified Working-Capital Requirement</option>
+                <option value="snoozed">Snooze (Wait for Accounts Filing)</option>
+                <option value="suppressed">Suppress (Benign Refinance / Existing Facility)</option>
+                <option value="disputed_signal">Dispute Stored Signal</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] font-mono text-slate-400 mb-1">Assigned Commercial Broker</label>
+              <input type="text" id="review-broker-input" placeholder="e.g. Jane Doe" class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500">
+            </div>
+            <div>
+              <label class="block text-[10px] font-mono text-slate-400 mb-1">Calibrated Outcome (Model Ground Truth)</label>
+              <select id="review-outcome-select" class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500">
+                <option value="">No outcome yet</option>
+                <option value="funded_refinance">Funded Facility / Refinance Won</option>
+                <option value="active_discussion">Active Broker Discussion</option>
+                <option value="existing_facility">Existing Committed Headroom Found</option>
+                <option value="no_funding_need">No External Finance Requirement</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="block text-[10px] font-mono text-slate-400 mb-1">Analyst / Broker Notes & Verification Checklist</label>
+            <textarea id="review-notes-textarea" rows="2" placeholder="Record verification results (e.g. checked MR04 release particulars, confirmed with finance director)..." class="w-full bg-slate-900 border border-slate-700 rounded p-2 text-xs text-slate-200 focus:outline-none focus:border-sky-500"></textarea>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] text-slate-500">All actions are signed and permanently recorded in the immutable audit trail.</span>
+            <button onclick="submitBrokerReview()" class="px-4 py-2 rounded bg-sky-600 hover:bg-sky-500 text-white font-medium text-xs flex items-center gap-1.5 transition">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+              Commit Review Decision
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Application Logic -->
+  <script>
+    let currentProspects = [];
+    let currentCrn = null;
+
+    document.addEventListener("DOMContentLoaded", () => {
+      refreshData();
+    });
+
+    async function refreshData() {
+      await Promise.all([
+        loadDashboardMetrics(),
+        loadProspects(),
+        loadEntityReviews(),
+        loadIntegrations()
+      ]);
+    }
+
+    async function loadDashboardMetrics() {
+      try {
+        const res = await fetch("/api/v1/prospects/dashboard-metrics");
+        const data = await res.json();
+        
+        document.getElementById("metric-total-companies").textContent = data.total_monitored_companies;
+        document.getElementById("metric-signals-30d").textContent = data.newly_detected_signals_30d;
+        document.getElementById("metric-strong-prospects").textContent = data.strong_prospects_count;
+        document.getElementById("metric-elevated-prospects").textContent = data.elevated_prospects_count;
+        document.getElementById("metric-awaiting-review").textContent = data.high_priority_awaiting_review;
+        document.getElementById("metric-unresolved-matches").textContent = data.unresolved_entity_matches;
+        document.getElementById("tab-count-entity").textContent = data.unresolved_entity_matches;
+
+        // Render provider pills in header
+        const pContainer = document.getElementById("provider-badges");
+        pContainer.innerHTML = data.provider_integrations.map(p => {
+          const isLive = p.status === 'live';
+          const isSim = p.status === 'simulated';
+          const badgeClass = isLive 
+            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
+            : (isSim ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' : 'bg-slate-800 text-slate-400 border-slate-700');
+          return `<span class="px-2 py-0.5 rounded font-mono border ${badgeClass}" title="${p.message}">${p.provider_name.replace('_', ' ').toUpperCase()}: ${p.status.toUpperCase()}</span>`;
+        }).join('');
+
+      } catch (e) {
+        console.error("Failed to load dashboard metrics", e);
+      }
+    }
+
+    async function loadProspects() {
+      try {
+        const res = await fetch("/api/v1/prospects");
+        currentProspects = await res.json();
+        renderProspectsTable(currentProspects);
+      } catch (e) {
+        console.error("Failed to load prospects", e);
+      }
+    }
+
+    function applyFilters() {
+      const search = document.getElementById("filter-search").value.toLowerCase();
+      const band = document.getElementById("filter-band").value;
+      const review = document.getElementById("filter-review").value;
+      const coverage = document.getElementById("filter-coverage").value;
+
+      const filtered = currentProspects.filter(p => {
+        if (search && !p.company_name.toLowerCase().includes(search) && !p.crn.toLowerCase().includes(search)) return false;
+        if (band && p.score_band !== band) return false;
+        if (review && p.review_status !== review) return false;
+        if (coverage && p.evidence_coverage !== coverage) return false;
+        return true;
+      });
+
+      renderProspectsTable(filtered);
+    }
+
+    function renderProspectsTable(prospects) {
+      const tbody = document.getElementById("prospects-table-body");
+      document.getElementById("prospects-count-display").textContent = `${prospects.length} prospects found`;
+
+      if (prospects.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" class="p-8 text-center text-slate-500 font-mono">No prospects match the selected filter criteria.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = prospects.map(p => {
+        // Score badge color
+        let scoreBadge = "bg-rose-500/20 text-rose-300 border-rose-500/40";
+        if (p.liquidity_strain_score < 25) scoreBadge = "bg-slate-800 text-slate-400 border-slate-700";
+        else if (p.liquidity_strain_score < 50) scoreBadge = "bg-sky-500/20 text-sky-300 border-sky-500/40";
+        else if (p.liquidity_strain_score < 75) scoreBadge = "bg-amber-500/20 text-amber-300 border-amber-500/40";
+
+        // Review badge
+        let revBadge = "bg-slate-800 text-slate-400";
+        if (p.review_status === "verified_opportunity") revBadge = "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+        else if (p.review_status === "in_review") revBadge = "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30";
+        else if (p.review_status === "suppressed") revBadge = "bg-slate-800/80 text-slate-500 line-through";
+
+        return `
+          <tr class="hover:bg-slate-850/60 transition group cursor-pointer" onclick="openProfile('${p.crn}')">
+            <td class="py-3 px-4">
+              <div class="font-semibold text-slate-100 group-hover:text-sky-400 flex items-center gap-1.5">
+                ${p.company_name}
+                ${p.is_synthetic ? '<span class="text-[9px] font-mono px-1 rounded bg-slate-800 text-slate-400">DEMO</span>' : ''}
+              </div>
+              <div class="text-[11px] font-mono text-slate-400 mt-0.5">CRN: ${p.crn} &bull; ${p.company_status.toUpperCase()}</div>
+            </td>
+            <td class="py-3 px-3">
+              <span class="text-sm font-bold font-mono px-2 py-0.5 rounded border ${scoreBadge}">
+                ${p.liquidity_strain_score.toFixed(1)}
+              </span>
+            </td>
+            <td class="py-3 px-3">
+              <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                ${p.score_band}
+              </span>
+            </td>
+            <td class="py-3 px-3 font-mono text-[11px] text-slate-300">
+              ${p.primary_signals_summary}
+            </td>
+            <td class="py-3 px-3 font-mono text-[11px] text-slate-400">
+              ${p.latest_signal_date ? new Date(p.latest_signal_date).toLocaleDateString('en-GB') : '-'}
+            </td>
+            <td class="py-3 px-3">
+              <span class="text-[10px] font-mono uppercase text-slate-400">${p.evidence_coverage}</span>
+            </td>
+            <td class="py-3 px-3">
+              <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded ${revBadge}">
+                ${p.review_status.replace('_', ' ')}
+              </span>
+            </td>
+            <td class="py-3 px-3 text-slate-400 text-[11px]">
+              ${p.assigned_broker_name || '<span class="text-slate-600 font-mono">Unassigned</span>'}
+            </td>
+            <td class="py-3 px-4 text-right">
+              <button onclick="event.stopPropagation(); openProfile('${p.crn}')" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-sky-600 text-slate-300 hover:text-white font-mono text-[11px] transition">
+                Inspect
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function openProfile(crn) {
+      currentCrn = crn;
+      try {
+        const res = await fetch(`/api/v1/companies/${crn}/profile`);
+        const data = await res.json();
+
+        // Header
+        document.getElementById("modal-company-name").textContent = data.company.company_name;
+        document.getElementById("modal-crn-badge").textContent = `CRN ${data.company.crn}`;
+        document.getElementById("modal-status-badge").textContent = data.company.company_status.toUpperCase();
+        document.getElementById("modal-synthetic-badge").style.display = data.company.is_synthetic ? "inline-block" : "none";
+        document.getElementById("modal-address").textContent = `Registered Office: ${data.company.registered_office_address || 'Unregistered'}`;
+        document.getElementById("modal-sic").textContent = `SIC: ${data.company.sic_codes || 'None'}`;
+
+        // Scores
+        const score = data.score_summary.score !== null ? data.score_summary.score.toFixed(1) : '--';
+        document.getElementById("modal-score-value").textContent = score;
+        document.getElementById("modal-score-band").textContent = data.score_summary.score_band.toUpperCase();
+        document.getElementById("modal-score-coverage").textContent = `Coverage: ${data.score_summary.evidence_coverage.toUpperCase()}`;
+
+        document.getElementById("modal-pillar-1").textContent = data.score_summary.financing_position_score.toFixed(1);
+        document.getElementById("modal-pillar-2").textContent = data.score_summary.credit_payment_risk_score.toFixed(1);
+        document.getElementById("modal-pillar-3").textContent = data.score_summary.workforce_expansion_score.toFixed(1);
+        document.getElementById("modal-pillar-4").textContent = data.score_summary.corroboration_score.toFixed(1);
+
+        // Feature Matrix
+        const feat = data.feature_snapshot;
+        document.getElementById("feat-dbt").textContent = feat.dbt_current_days !== null ? `${feat.dbt_current_days.toFixed(1)} days overdue` : 'No observations';
+        document.getElementById("feat-dbt-trend").textContent = feat.dbt_trend_90d !== null ? `Trend: ${feat.dbt_trend_90d > 0 ? '+' : ''}${feat.dbt_trend_90d.toFixed(1)}d in 90d` : 'Trend: Stable';
+        
+        document.getElementById("feat-dso").textContent = feat.dso_data_available ? `${feat.dso_current_days} days` : 'Unobserved in public filings';
+        
+        document.getElementById("feat-charge-recency").textContent = feat.age_latest_charge_satisfaction_days !== null ? `${feat.age_latest_charge_satisfaction_days.toFixed(0)} days ago` : 'No MR04 filings';
+        document.getElementById("feat-charge-scope").textContent = `Scope: ${feat.latest_charge_scope ? feat.latest_charge_scope.toUpperCase() : 'None'}`;
+
+        document.getElementById("feat-headcount-growth").textContent = feat.headcount_growth_90d_pct !== null ? `${feat.headcount_growth_90d_pct > 0 ? '+' : ''}${feat.headcount_growth_90d_pct.toFixed(1)}% (${feat.headcount_current || '--'} staff)` : 'No observations';
+        document.getElementById("feat-headcount-conf").textContent = `Spacing Conf: ${(feat.headcount_confidence_score * 100).toFixed(0)}%`;
+
+        // AI Summary
+        if (data.explanation) {
+          document.getElementById("modal-ai-model").textContent = `Model: ${data.explanation.model_version}`;
+          document.getElementById("modal-ai-reasoning").textContent = data.explanation.reasoning_summary;
+
+          const stepsContainer = document.getElementById("modal-verification-steps");
+          stepsContainer.innerHTML = data.explanation.recommended_verification_steps.map(s => `
+            <div class="bg-slate-900 p-2.5 rounded border border-slate-800 flex items-start gap-2.5">
+              <span class="w-5 h-5 rounded bg-sky-500/20 text-sky-400 font-mono text-[10px] flex items-center justify-center shrink-0 mt-0.5">${s.step_number}</span>
+              <div>
+                <div class="font-semibold text-slate-200">${s.recommendation}</div>
+                <div class="text-[11px] text-slate-400 mt-0.5">${s.justification}</div>
+              </div>
+            </div>
+          `).join('');
+        }
+
+        // Signals Provenance Timeline
+        const sigTable = document.getElementById("modal-signals-table");
+        sigTable.innerHTML = data.signals_timeline.map(s => `
+          <tr class="hover:bg-slate-900/60">
+            <td class="p-2 font-mono font-semibold text-sky-400">${s.signal_type}</td>
+            <td class="p-2 font-mono text-slate-400 uppercase">${s.source_provider}</td>
+            <td class="p-2 font-mono text-slate-400">${new Date(s.observation_timestamp).toLocaleDateString('en-GB')}</td>
+            <td class="p-2 text-slate-200">${s.value_text}</td>
+            <td class="p-2 font-mono text-[10px] text-slate-400 truncate max-w-xs">${s.evidence_reference || '-'}</td>
+            <td class="p-2"><span class="px-1.5 py-0.5 rounded text-[10px] font-mono ${s.verification_status === 'disputed' ? 'bg-rose-500/20 text-rose-300' : 'bg-emerald-500/20 text-emerald-300'}">${s.verification_status.toUpperCase()}</span></td>
+          </tr>
+        `).join('');
+
+        document.getElementById("profile-modal").classList.remove("hidden");
+      } catch (e) {
+        console.error("Failed to load company profile", e);
+      }
+    }
+
+    function closeProfileModal() {
+      document.getElementById("profile-modal").classList.add("hidden");
+    }
+
+    async function submitBrokerReview() {
+      if (!currentCrn) return;
+      const status = document.getElementById("review-status-select").value;
+      const broker = document.getElementById("review-broker-input").value;
+      const outcome = document.getElementById("review-outcome-select").value;
+      const notes = document.getElementById("review-notes-textarea").value;
+
+      try {
+        const res = await fetch(`/api/v1/reviews/prospects/${currentCrn}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            review_status: status,
+            assigned_broker_name: broker || "Commercial Broker",
+            outcome: outcome || null,
+            notes: notes
+          })
+        });
+
+        if (res.ok) {
+          closeProfileModal();
+          await refreshData();
+        }
+      } catch (e) {
+        console.error("Failed to submit review", e);
+      }
+    }
+
+    async function loadEntityReviews() {
+      try {
+        const res = await fetch("/api/v1/reviews/matches?status=pending");
+        const matches = await res.json();
+        const container = document.getElementById("entity-review-list");
+        
+        if (matches.length === 0) {
+          container.innerHTML = `<div class="p-8 text-center text-slate-500 font-mono">No pending ambiguous entity matches in queue.</div>`;
+          return;
+        }
+
+        container.innerHTML = matches.map(m => `
+          <div class="bg-slate-900 border border-slate-800 rounded p-4 flex items-center justify-between">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-mono font-bold text-amber-400">Match Similarity: ${(m.match_score * 100).toFixed(0)}%</span>
+                <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-400">${m.source_provider}</span>
+              </div>
+              <div class="text-sm font-semibold text-slate-100 mt-1">Input: "${m.source_identifier}"</div>
+              <div class="text-xs text-slate-400 mt-0.5">Candidate Match: <strong class="text-slate-200">${m.candidate_name}</strong> (CRN ${m.candidate_crn})</div>
+              <div class="text-[10px] font-mono text-slate-500 mt-1">${m.raw_payload_summary || ''}</div>
+            </div>
+            <div class="flex items-center space-x-2">
+              <button onclick="decideMatch(${m.id}, 'approved')" class="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs transition">
+                Approve Link
+              </button>
+              <button onclick="decideMatch(${m.id}, 'rejected')" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-rose-400 border border-rose-500/30 font-medium text-xs transition">
+                Reject Link
+              </button>
+            </div>
+          </div>
+        `).join('');
+      } catch (e) {
+        console.error("Failed to load entity reviews", e);
+      }
+    }
+
+    async function decideMatch(matchId, status) {
+      try {
+        const res = await fetch(`/api/v1/reviews/matches/${matchId}/decision`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: status, reviewer_notes: `Manual resolution: ${status}` })
+        });
+        if (res.ok) {
+          await loadEntityReviews();
+          await loadDashboardMetrics();
+        }
+      } catch (e) {
+        console.error("Failed to decide match", e);
+      }
+    }
+
+    async function loadIntegrations() {
+      try {
+        const res = await fetch("/api/v1/system/providers");
+        const providers = await res.json();
+        const grid = document.getElementById("integrations-grid");
+
+        grid.innerHTML = providers.map(p => {
+          const isLive = p.status === 'live';
+          const isSim = p.status === 'simulated';
+          const badgeClass = isLive 
+            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
+            : (isSim ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' : 'bg-slate-800 text-slate-400 border-slate-700');
+
+          return `
+            <div class="bg-slate-900 border border-slate-800 rounded p-4 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center justify-between mb-2">
+                  <h3 class="text-sm font-bold text-slate-100 font-mono">${p.provider_name.replace('_', ' ').toUpperCase()}</h3>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-mono border ${badgeClass}">${p.status.toUpperCase()}</span>
+                </div>
+                <div class="text-xs text-slate-400 mb-2">${p.message || ''}</div>
+                <div class="text-[10px] font-mono text-slate-500">Endpoint: ${p.endpoint || 'Internal Connector'}</div>
+              </div>
+              <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-mono text-slate-500">
+                <span>Rate Limit: ${p.rate_limit_remaining !== null ? `${p.rate_limit_remaining} calls/min` : 'N/A'}</span>
+                <span>Last Observed: ${p.last_event_timestamp ? new Date(p.last_event_timestamp).toLocaleTimeString() : 'Active'}</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+      } catch (e) {
+        console.error("Failed to load integrations", e);
+      }
+    }
+
+    async function pollChargesStream() {
+      try {
+        const res = await fetch("/api/v1/ingest/sync/companies-house-stream", { method: "POST" });
+        const data = await res.json();
+        alert(`Charges stream sync completed. Processed ${data.events_processed} filings. Checkpoint advanced to cursor ${data.next_timepoint}.`);
+        await refreshData();
+      } catch (e) {
+        alert("Failed to poll charges stream: " + e.message);
+      }
+    }
+
+    function switchTab(tab) {
+      document.getElementById("tab-prospects").classList.add("hidden");
+      document.getElementById("tab-entity-review").classList.add("hidden");
+      document.getElementById("tab-integrations").classList.add("hidden");
+
+      document.getElementById("tab-btn-prospects").className = "py-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2";
+      document.getElementById("tab-btn-entity-review").className = "py-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2";
+      document.getElementById("tab-btn-integrations").className = "py-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2";
+
+      document.getElementById(`tab-${tab}`).classList.remove("hidden");
+      document.getElementById(`tab-btn-${tab}`).className = "py-3 border-b-2 border-sky-500 text-sky-400 flex items-center gap-2 font-medium";
+    }
+  </script>
+</body>
+</html>
