@@ -101,22 +101,26 @@
       to { transform: rotate(360deg); }
     }
 
-    /* Floating Intelligence Snapshot Hovercard */
+    /* Floating Intelligence Snapshot Hovercard (Optimized Hardware-Accelerated) */
     .intel-hovercard {
       position: fixed;
+      top: 0;
+      left: 0;
       z-index: 9999;
       width: 440px;
       max-width: calc(100vw - 32px);
-      pointer-events: auto;
+      pointer-events: none;
       opacity: 0;
-      transform: translateY(6px) scale(0.98);
-      transition: opacity 0.18s cubic-bezier(0.16, 1, 0.3, 1), transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-      box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(56, 189, 248, 0.3);
-      backdrop-filter: blur(12px);
+      visibility: hidden;
+      will-change: transform, opacity;
+      transition: opacity 0.14s ease-out, visibility 0.14s ease-out;
+      box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(56, 189, 248, 0.35);
+      background-color: #0c1322 !important; /* High-performance opaque composite without GPU backdrop-blur reflow */
     }
     .intel-hovercard.active {
       opacity: 1;
-      transform: translateY(0) scale(1);
+      visibility: visible;
+      pointer-events: auto;
     }
 
     /* Floating Broker Alert HUD */
@@ -1667,7 +1671,7 @@
       const fullList = [...items, ...items];
       track.innerHTML = fullList.map(item => `
         <span class="inline-flex items-center gap-1.5 cursor-pointer hover:text-sky-300 transition" 
-              ${item.crn !== 'SYSTEM' && item.crn !== 'MODEL' ? `onmouseenter="showHovercard(event, '${item.crn}')" onmousemove="positionHovercard(event)" onmouseleave="hideHovercard()"` : ''}
+              ${item.crn !== 'SYSTEM' && item.crn !== 'MODEL' ? `onmouseenter="showHovercard(event, '${item.crn}')" onmouseleave="hideHovercard()"` : ''}
               onclick="quickFocusCrn('${item.crn}')">
           <span class="text-slate-500">${item.time}</span>
           <span class="px-1.5 py-0.2 rounded text-[10px] border ${item.color}">${item.tag}</span>
@@ -1688,7 +1692,7 @@
 
       feed.innerHTML = filtered.slice(-25).map(l => `
         <div class="flex items-start gap-1.5 hover:bg-slate-900/60 p-0.5 rounded cursor-pointer transition" 
-             ${l.crn !== 'SYSTEM' && l.crn !== 'MODEL' ? `onmouseenter="showHovercard(event, '${l.crn}')" onmousemove="positionHovercard(event)" onmouseleave="hideHovercard()"` : ''}
+             ${l.crn !== 'SYSTEM' && l.crn !== 'MODEL' ? `onmouseenter="showHovercard(event, '${l.crn}')" onmouseleave="hideHovercard()"` : ''}
              onclick="quickFocusCrn('${l.crn}')">
           <span class="text-slate-500 shrink-0 select-none">${l.time}</span>
           <span class="px-1 py-0.2 rounded text-[9px] shrink-0 border ${l.color}">${l.tag}</span>
@@ -2108,9 +2112,49 @@
       };
     }
 
+    let hovercardTimeout = null;
+    let hovercardHideTimeout = null;
+    let isHovercardOver = false;
+    let isHovercardVisible = false;
+    let hovercardElements = null;
+
+    function getHovercardElements() {
+      if (!hovercardElements) {
+        hovercardElements = {
+          card: document.getElementById("intel-hovercard"),
+          companyName: document.getElementById("hovercard-company-name"),
+          syntheticBadge: document.getElementById("hovercard-synthetic-badge"),
+          crn: document.getElementById("hovercard-crn"),
+          status: document.getElementById("hovercard-status"),
+          scoreVal: document.getElementById("hovercard-score-value"),
+          scoreBand: document.getElementById("hovercard-score-band"),
+          rBox: document.getElementById("hovercard-rationale-box"),
+          tIcon: document.getElementById("hovercard-trigger-icon"),
+          tTitle: document.getElementById("hovercard-trigger-title"),
+          pBadge: document.getElementById("hovercard-provider-badge"),
+          tRationale: document.getElementById("hovercard-trigger-rationale"),
+          provenance: document.getElementById("hovercard-provenance"),
+          freshness: document.getElementById("hovercard-freshness"),
+          charges: document.getElementById("hovercard-stat-charges"),
+          chargesPts: document.getElementById("hovercard-stat-charges-pts"),
+          dbt: document.getElementById("hovercard-stat-dbt"),
+          dbtPts: document.getElementById("hovercard-stat-dbt-pts"),
+          payroll: document.getElementById("hovercard-stat-payroll"),
+          payrollPts: document.getElementById("hovercard-stat-payroll-pts"),
+          corrob: document.getElementById("hovercard-stat-corrob"),
+          corrobPts: document.getElementById("hovercard-stat-corrob-pts"),
+          facilityFit: document.getElementById("hovercard-facility-fit"),
+          evoiVal: document.getElementById("hovercard-evoi-val"),
+          htStatus: document.getElementById("hovercard-human-touch-status"),
+          htPill: document.getElementById("hovercard-human-boost-pill")
+        };
+      }
+      return hovercardElements;
+    }
+
     function populateHovercard(crn, prospect, profile) {
-      const card = document.getElementById("intel-hovercard");
-      if (!card) return;
+      const els = getHovercardElements();
+      if (!els.card) return;
 
       const compName = prospect?.company_name || profile?.company?.company_name || "Company";
       const score = (prospect?.liquidity_strain_score !== undefined ? prospect.liquidity_strain_score : profile?.score_summary?.score) || 0;
@@ -2119,75 +2163,75 @@
       const status = profile?.company?.company_status || prospect?.company_status || "ACTIVE";
 
       // 1. Header
-      document.getElementById("hovercard-company-name").textContent = compName;
-      document.getElementById("hovercard-crn").textContent = `CRN ${crn}`;
-      document.getElementById("hovercard-status").textContent = status.toUpperCase();
-      document.getElementById("hovercard-synthetic-badge").style.display = isSynthetic ? "inline-block" : "none";
-      document.getElementById("hovercard-score-value").textContent = score.toFixed(1);
+      if (els.companyName) els.companyName.textContent = compName;
+      if (els.crn) els.crn.textContent = `CRN ${crn}`;
+      if (els.status) els.status.textContent = status.toUpperCase();
+      if (els.syntheticBadge) els.syntheticBadge.style.display = isSynthetic ? "inline-block" : "none";
+      if (els.scoreVal) els.scoreVal.textContent = score.toFixed(1);
       
-      const scoreEl = document.getElementById("hovercard-score-value");
-      const bandEl = document.getElementById("hovercard-score-band");
-      bandEl.textContent = band.toUpperCase();
+      if (els.scoreBand) els.scoreBand.textContent = band.toUpperCase();
 
-      if (score >= 75) {
-        scoreEl.className = "text-lg font-bold font-mono text-rose-400 leading-none";
-        bandEl.className = "text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 mt-1";
-      } else if (score >= 50) {
-        scoreEl.className = "text-lg font-bold font-mono text-amber-400 leading-none";
-        bandEl.className = "text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 mt-1";
-      } else {
-        scoreEl.className = "text-lg font-bold font-mono text-sky-400 leading-none";
-        bandEl.className = "text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 border border-sky-500/40 mt-1";
+      if (els.scoreVal && els.scoreBand) {
+        if (score >= 75) {
+          els.scoreVal.className = "text-lg font-bold font-mono text-rose-400 leading-none";
+          els.scoreBand.className = "text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 mt-1";
+        } else if (score >= 50) {
+          els.scoreVal.className = "text-lg font-bold font-mono text-amber-400 leading-none";
+          els.scoreBand.className = "text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 mt-1";
+        } else {
+          els.scoreVal.className = "text-lg font-bold font-mono text-sky-400 leading-none";
+          els.scoreBand.className = "text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 border border-sky-500/40 mt-1";
+        }
       }
 
       // 2. Surfacing Rationale & Provider Intelligence
       const intel = getSurfacingRationale(crn, prospect, profile);
 
-      const rBox = document.getElementById("hovercard-rationale-box");
-      rBox.className = `my-2 p-2.5 rounded ${intel.boxClass}`;
-      document.getElementById("hovercard-trigger-icon").textContent = intel.icon;
-      document.getElementById("hovercard-trigger-title").textContent = intel.title;
+      if (els.rBox) els.rBox.className = `my-2 p-2.5 rounded ${intel.boxClass}`;
+      if (els.tIcon) els.tIcon.textContent = intel.icon;
+      if (els.tTitle) els.tTitle.textContent = intel.title;
       
-      const pBadge = document.getElementById("hovercard-provider-badge");
-      pBadge.textContent = intel.provider;
-      pBadge.className = `px-1.5 py-0.2 rounded font-mono text-[9px] border ${intel.providerClass}`;
+      if (els.pBadge) {
+        els.pBadge.textContent = intel.provider;
+        els.pBadge.className = `px-1.5 py-0.2 rounded font-mono text-[9px] border ${intel.providerClass}`;
+      }
 
-      document.getElementById("hovercard-trigger-rationale").textContent = intel.rationale;
-      document.getElementById("hovercard-provenance").textContent = intel.provenance;
+      if (els.tRationale) els.tRationale.textContent = intel.rationale;
+      if (els.provenance) els.provenance.textContent = intel.provenance;
       
       const latestDate = prospect?.latest_signal_date || profile?.score_summary?.scored_at;
-      document.getElementById("hovercard-freshness").textContent = latestDate 
-        ? `Observed: ${new Date(latestDate).toLocaleDateString('en-GB')}` 
-        : "Observed: Recent";
+      if (els.freshness) {
+        els.freshness.textContent = latestDate 
+          ? `Observed: ${new Date(latestDate).toLocaleDateString('en-GB')}` 
+          : "Observed: Recent";
+      }
 
-      // 3. 4-Box Key Metrics Grid
-      document.getElementById("hovercard-stat-charges").textContent = intel.chargesText;
-      document.getElementById("hovercard-stat-charges-pts").textContent = intel.chargesPts;
-      document.getElementById("hovercard-stat-dbt").textContent = intel.dbtText;
-      document.getElementById("hovercard-stat-dbt-pts").textContent = intel.dbtPts;
-      document.getElementById("hovercard-stat-payroll").textContent = intel.payrollText;
-      document.getElementById("hovercard-stat-payroll-pts").textContent = intel.payrollPts;
-      document.getElementById("hovercard-stat-corrob").textContent = intel.corrobText;
-      document.getElementById("hovercard-stat-corrob-pts").textContent = intel.corrobPts;
+      // 3. Key Metrics
+      if (els.charges) els.charges.textContent = intel.chargesText;
+      if (els.chargesPts) els.chargesPts.textContent = intel.chargesPts;
+      if (els.dbt) els.dbt.textContent = intel.dbtText;
+      if (els.dbtPts) els.dbtPts.textContent = intel.dbtPts;
+      if (els.payroll) els.payroll.textContent = intel.payrollText;
+      if (els.payrollPts) els.payrollPts.textContent = intel.payrollPts;
+      if (els.corrob) els.corrob.textContent = intel.corrobText;
+      if (els.corrobPts) els.corrobPts.textContent = intel.corrobPts;
 
-      // 4. Recommended Facility & EVOI
-      document.getElementById("hovercard-facility-fit").textContent = intel.facilityFit;
-      document.getElementById("hovercard-evoi-val").textContent = intel.evoiVal;
+      // 4. Facility & EVOI
+      if (els.facilityFit) els.facilityFit.textContent = intel.facilityFit;
+      if (els.evoiVal) els.evoiVal.textContent = intel.evoiVal;
 
       // 5. Human Touch Recognition Status
-      const htStatusEl = document.getElementById("hovercard-human-touch-status");
-      const htPillEl = document.getElementById("hovercard-human-boost-pill");
-      if (htStatusEl && htPillEl) {
+      if (els.htStatus && els.htPill) {
         if (prospect?.human_touch_boost) {
-          htStatusEl.textContent = "🤝 Active: +16.0 pt broker intervention boost applied to score";
-          htStatusEl.className = "text-purple-300 font-semibold text-[10px] mt-0.5";
-          htPillEl.className = "px-1.5 py-0.5 rounded text-[10px] font-mono bg-purple-500 text-white font-bold";
-          htPillEl.textContent = "ACTIVE (+16)";
+          els.htStatus.textContent = "🤝 Active: +16.0 pt broker intervention boost applied to score";
+          els.htStatus.className = "text-purple-300 font-semibold text-[10px] mt-0.5";
+          els.htPill.className = "px-1.5 py-0.5 rounded text-[10px] font-mono bg-purple-500 text-white font-bold";
+          els.htPill.textContent = "ACTIVE (+16)";
         } else {
-          htStatusEl.textContent = "Broker intervention has potential to add +16.0 pts to probability score";
-          htStatusEl.className = "text-slate-300 text-[10px] mt-0.5";
-          htPillEl.className = "px-1.5 py-0.5 rounded text-[10px] font-mono bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold";
-          htPillEl.textContent = "+16.0 PTS";
+          els.htStatus.textContent = "Broker intervention has potential to add +16.0 pts to probability score";
+          els.htStatus.className = "text-slate-300 text-[10px] mt-0.5";
+          els.htPill.className = "px-1.5 py-0.5 rounded text-[10px] font-mono bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold";
+          els.htPill.textContent = "+16.0 PTS";
         }
       }
     }
@@ -2196,89 +2240,103 @@
       if (!crn || crn === 'SYSTEM' || crn === 'MODEL') return;
       clearTimeout(hovercardHideTimeout);
 
+      const clientX = event.clientX;
+      const clientY = event.clientY;
+
+      // Fast switch (30ms) if already visible; 150ms intent delay if opening cold
+      const delay = isHovercardVisible ? 30 : 150;
+
+      clearTimeout(hovercardTimeout);
       hovercardTimeout = setTimeout(() => {
-        const card = document.getElementById("intel-hovercard");
-        if (!card) return;
+        const els = getHovercardElements();
+        if (!els.card) return;
 
         const prospect = currentProspects.find(p => p.crn === crn);
         let profile = profileCache[crn];
 
-        if (!profile) {
+        if (!profile && profileCache[crn] !== 'loading') {
+          profileCache[crn] = 'loading';
           fetch(`/api/v1/companies/${crn}/profile`)
             .then(res => res.json())
             .then(data => {
               profileCache[crn] = data;
-              if (card.dataset.crn === crn && !card.classList.contains("hidden")) {
+              if (els.card.dataset.crn === crn && isHovercardVisible) {
                 populateHovercard(crn, prospect, data);
               }
             })
-            .catch(() => {});
+            .catch(() => {
+              delete profileCache[crn];
+            });
         }
 
-        populateHovercard(crn, prospect, profile);
-        positionHovercard(event);
+        populateHovercard(crn, prospect, typeof profile === 'object' ? profile : null);
+        positionHovercardFast(clientX, clientY);
 
-        card.dataset.crn = crn;
-        card.classList.remove("hidden");
-        void card.offsetWidth; // Force layout
-        card.classList.add("active");
-      }, 120);
+        els.card.dataset.crn = crn;
+        els.card.classList.remove("hidden");
+        els.card.classList.add("active");
+        isHovercardVisible = true;
+      }, delay);
     }
 
     function hideHovercard() {
       clearTimeout(hovercardTimeout);
       hovercardHideTimeout = setTimeout(() => {
         if (!isHovercardOver) {
-          const card = document.getElementById("intel-hovercard");
-          if (card) {
-            card.classList.remove("active");
+          const els = getHovercardElements();
+          if (els.card) {
+            els.card.classList.remove("active");
+            isHovercardVisible = false;
             setTimeout(() => {
-              if (!card.classList.contains("active")) {
-                card.classList.add("hidden");
+              if (!isHovercardVisible && !els.card.classList.contains("active")) {
+                els.card.classList.add("hidden");
               }
-            }, 180);
+            }, 140);
           }
         }
-      }, 120);
+      }, 100);
     }
 
-    function positionHovercard(event) {
-      const card = document.getElementById("intel-hovercard");
-      if (!card || card.classList.contains("hidden")) return;
+    function positionHovercardFast(clientX, clientY) {
+      const els = getHovercardElements();
+      if (!els.card) return;
 
       const cardWidth = 440;
-      const cardHeight = card.offsetHeight || 380;
+      const estimatedHeight = 360;
       const padding = 16;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
 
-      let x = event.clientX + 16;
-      let y = event.clientY - 40;
+      let x = clientX + 16;
+      let y = clientY - 30;
 
-      if (x + cardWidth > window.innerWidth - padding) {
-        x = event.clientX - cardWidth - 16;
+      // Flip horizontally if overflow
+      if (x + cardWidth > vw - padding) {
+        x = clientX - cardWidth - 16;
       }
       if (x < padding) {
         x = padding;
       }
 
-      if (y + cardHeight > window.innerHeight - padding) {
-        y = window.innerHeight - cardHeight - padding;
+      // Flip vertically if overflow
+      if (y + estimatedHeight > vh - padding) {
+        y = Math.max(padding, vh - estimatedHeight - padding);
       }
       if (y < padding) {
         y = padding;
       }
 
-      card.style.left = `${Math.round(x)}px`;
-      card.style.top = `${Math.round(y)}px`;
+      els.card.style.transform = `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0)`;
     }
 
     function initHovercardListeners() {
-      const card = document.getElementById("intel-hovercard");
-      if (card) {
-        card.addEventListener("mouseenter", () => {
+      const els = getHovercardElements();
+      if (els.card) {
+        els.card.addEventListener("mouseenter", () => {
           isHovercardOver = true;
           clearTimeout(hovercardHideTimeout);
         });
-        card.addEventListener("mouseleave", () => {
+        els.card.addEventListener("mouseleave", () => {
           isHovercardOver = false;
           hideHovercard();
         });
@@ -2287,7 +2345,7 @@
         if (e.key === "Escape") hideHovercard();
       });
       window.addEventListener("scroll", () => {
-        hideHovercard();
+        if (isHovercardVisible && !isHovercardOver) hideHovercard();
       }, { passive: true });
     }
 
@@ -2388,7 +2446,6 @@
         return `
           <tr id="prospect-row-${p.crn}" class="hover:bg-slate-850/60 transition group cursor-pointer" 
               onmouseenter="showHovercard(event, '${p.crn}')"
-              onmousemove="positionHovercard(event)"
               onmouseleave="hideHovercard()"
               onclick="hideHovercard(); lockRadarOnCompany('${p.crn}'); openProfile('${p.crn}')">
             <td class="py-3 px-4">
