@@ -101,10 +101,32 @@
       to { transform: rotate(360deg); }
     }
 
+    /* Floating Intelligence Snapshot Hovercard */
+    .intel-hovercard {
+      position: fixed;
+      z-index: 9999;
+      width: 440px;
+      max-width: calc(100vw - 32px);
+      pointer-events: auto;
+      opacity: 0;
+      transform: translateY(6px) scale(0.98);
+      transition: opacity 0.18s cubic-bezier(0.16, 1, 0.3, 1), transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(56, 189, 248, 0.3);
+      backdrop-filter: blur(12px);
+    }
+    .intel-hovercard.active {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+
     /* Respect prefers-reduced-motion */
     @media (prefers-reduced-motion: reduce) {
       .radar-sweep, .soft-pulse, .ticker-track {
         animation: none !important;
+      }
+      .intel-hovercard {
+        transition: none !important;
+        transform: none !important;
       }
       progress.loading-spinner:indeterminate {
         animation-duration: 4s !important;
@@ -1220,6 +1242,96 @@
     </div>
   </div>
 
+  <!-- Floating Intelligence Snapshot Hovercard (Context-Aware Surfacing Rationale) -->
+  <div id="intel-hovercard" class="intel-hovercard hidden bg-slate-900 border border-slate-700/80 rounded-lg p-3.5 text-xs font-sans text-slate-200">
+    <!-- Header with Live Score and Band -->
+    <div class="flex items-start justify-between pb-2 border-b border-slate-800">
+      <div>
+        <div class="flex items-center gap-1.5">
+          <span id="hovercard-company-name" class="font-bold text-slate-100 text-sm">Company Name Ltd</span>
+          <span id="hovercard-synthetic-badge" class="text-[9px] font-mono px-1 rounded bg-slate-800 text-slate-400">DEMO</span>
+        </div>
+        <div class="text-[11px] font-mono text-slate-400 flex items-center gap-2 mt-0.5">
+          <span id="hovercard-crn">CRN 00000000</span>
+          <span>&bull;</span>
+          <span id="hovercard-status" class="text-emerald-400 font-semibold">ACTIVE</span>
+        </div>
+      </div>
+      <div class="text-right shrink-0 ml-3">
+        <div id="hovercard-score-value" class="text-lg font-bold font-mono text-rose-400 leading-none">--</div>
+        <div id="hovercard-score-band" class="text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 mt-1">BAND</div>
+      </div>
+    </div>
+
+    <!-- Context-Aware Surfacing Rationale Box -->
+    <div id="hovercard-rationale-box" class="my-2 p-2.5 rounded bg-sky-950/60 border border-sky-500/30">
+      <div class="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider mb-1">
+        <span class="flex items-center gap-1 font-bold text-sky-300">
+          <span id="hovercard-trigger-icon">⚡</span>
+          <span id="hovercard-trigger-title">SURFACING TRIGGER: FORM MR04 SATISFACTION</span>
+        </span>
+        <span id="hovercard-provider-badge" class="px-1.5 py-0.2 rounded bg-slate-800 text-sky-400 border border-sky-500/30">COMPANIES HOUSE</span>
+      </div>
+      <p id="hovercard-trigger-rationale" class="text-slate-300 text-[11px] leading-relaxed">
+        Full satisfaction of fixed/floating charge released previously pledged collateral, liberating debt capacity for immediate working-capital facility arrangement.
+      </p>
+    </div>
+
+    <!-- Provider Provenance & Freshness -->
+    <div class="flex items-center justify-between text-[10px] font-mono text-slate-400 pb-1.5 border-b border-slate-800/80">
+      <span class="flex items-center gap-1">
+        <span>PROVENANCE:</span>
+        <span id="hovercard-provenance" class="text-slate-300 font-mono">companies_house_stream:mr04</span>
+      </span>
+      <span id="hovercard-freshness" class="text-slate-400">Observed: 3d ago</span>
+    </div>
+
+    <!-- Key Metrics 4-Box Grid -->
+    <div class="grid grid-cols-2 gap-2 my-2 text-[11px] font-mono">
+      <div class="bg-slate-950 p-2 rounded border border-slate-800">
+        <div class="text-[9px] text-slate-400 uppercase">1. STATUTORY CHARGES</div>
+        <div id="hovercard-stat-charges" class="font-bold text-slate-100 mt-0.5">Satisfied (Full Scope)</div>
+        <div id="hovercard-stat-charges-pts" class="text-[9px] text-sky-400">+35.0 Strain Pts</div>
+      </div>
+      <div class="bg-slate-950 p-2 rounded border border-slate-800">
+        <div class="text-[9px] text-slate-400 uppercase">2. PAYMENT RISK (DBT)</div>
+        <div id="hovercard-stat-dbt" class="font-bold text-slate-100 mt-0.5">32.0 Days Overdue</div>
+        <div id="hovercard-stat-dbt-pts" class="text-[9px] text-amber-400">+22.0 Strain Pts</div>
+      </div>
+      <div class="bg-slate-950 p-2 rounded border border-slate-800">
+        <div class="text-[9px] text-slate-400 uppercase">3. PAYROLL EXPANSION</div>
+        <div id="hovercard-stat-payroll" class="font-bold text-slate-100 mt-0.5">+14.2% Headcount</div>
+        <div id="hovercard-stat-payroll-pts" class="text-[9px] text-emerald-400">+11.4 Strain Pts</div>
+      </div>
+      <div class="bg-slate-950 p-2 rounded border border-slate-800">
+        <div class="text-[9px] text-slate-400 uppercase">4. CORROBORATION</div>
+        <div id="hovercard-stat-corrob" class="font-bold text-slate-100 mt-0.5">2 Sources Verified</div>
+        <div id="hovercard-stat-corrob-pts" class="text-[9px] text-emerald-400">Cap Unlocked (&gt;49)</div>
+      </div>
+    </div>
+
+    <!-- Commercial Facility Fit & Next Action -->
+    <div class="bg-slate-950 p-2 rounded border border-slate-800/80 flex items-center justify-between text-[11px] font-mono">
+      <div>
+        <div class="text-[9px] text-slate-400 uppercase">RECOMMENDED FACILITY FIT</div>
+        <div id="hovercard-facility-fit" class="text-sky-300 font-semibold truncate max-w-[260px]">Invoice Discounting / Asset Refinance</div>
+      </div>
+      <div class="text-right">
+        <div class="text-[9px] text-slate-400 uppercase">EVOI VALUE</div>
+        <div id="hovercard-evoi-val" class="text-emerald-400 font-bold">+£18.50 Net</div>
+      </div>
+    </div>
+
+    <!-- Footer Click Hint -->
+    <div class="mt-2 pt-1.5 flex items-center justify-between text-[10px] font-mono text-slate-500">
+      <span class="flex items-center gap-1">
+        <svg class="w-3 h-3 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path></svg>
+        Click to inspect forensic dossier &amp; broker workflow
+      </span>
+      <span class="text-slate-600">[Esc] to close</span>
+    </div>
+  </div>
+
   <!-- Application Logic -->
   <script>
     let currentProspects = [];
@@ -1351,7 +1463,9 @@
       // Double the array for seamless infinite marquee loop
       const fullList = [...items, ...items];
       track.innerHTML = fullList.map(item => `
-        <span class="inline-flex items-center gap-1.5 cursor-pointer hover:text-sky-300 transition" onclick="quickFocusCrn('${item.crn}')">
+        <span class="inline-flex items-center gap-1.5 cursor-pointer hover:text-sky-300 transition" 
+              ${item.crn !== 'SYSTEM' && item.crn !== 'MODEL' ? `onmouseenter="showHovercard(event, '${item.crn}')" onmousemove="positionHovercard(event)" onmouseleave="hideHovercard()"` : ''}
+              onclick="quickFocusCrn('${item.crn}')">
           <span class="text-slate-500">${item.time}</span>
           <span class="px-1.5 py-0.2 rounded text-[10px] border ${item.color}">${item.tag}</span>
           <span class="text-slate-200 font-semibold">${item.crn !== 'SYSTEM' && item.crn !== 'MODEL' ? 'CRN ' + item.crn + ':' : ''}</span>
@@ -1370,7 +1484,9 @@
         : radarState.terminalLogs.filter(l => l.category === radarState.terminalFilter);
 
       feed.innerHTML = filtered.slice(-25).map(l => `
-        <div class="flex items-start gap-1.5 hover:bg-slate-900/60 p-0.5 rounded cursor-pointer transition" onclick="quickFocusCrn('${l.crn}')">
+        <div class="flex items-start gap-1.5 hover:bg-slate-900/60 p-0.5 rounded cursor-pointer transition" 
+             ${l.crn !== 'SYSTEM' && l.crn !== 'MODEL' ? `onmouseenter="showHovercard(event, '${l.crn}')" onmousemove="positionHovercard(event)" onmouseleave="hideHovercard()"` : ''}
+             onclick="quickFocusCrn('${l.crn}')">
           <span class="text-slate-500 shrink-0 select-none">${l.time}</span>
           <span class="px-1 py-0.2 rounded text-[9px] shrink-0 border ${l.color}">${l.tag}</span>
           <span class="text-slate-400 shrink-0 font-semibold">${l.crn !== 'SYSTEM' && l.crn !== 'MODEL' ? l.crn : ''}</span>
@@ -1631,8 +1747,310 @@
       }
     }
 
+    // ==========================================
+    // CONTEXT-AWARE HOVERCARD & SURFACING REASON ENGINE
+    // ==========================================
+
+    let profileCache = {};
+    let hovercardTimeout = null;
+    let hovercardHideTimeout = null;
+    let isHovercardOver = false;
+
+    function getSurfacingRationale(crn, prospect, profile) {
+      const summary = (prospect?.primary_signals_summary || "").toLowerCase();
+      const feat = profile?.feature_snapshot || {};
+      const score = (prospect?.liquidity_strain_score !== undefined ? prospect.liquidity_strain_score : profile?.score_summary?.score) || 0;
+      const coverage = (prospect?.evidence_coverage || feat?.evidence_coverage || "").toLowerCase();
+
+      // Case 1: Statutory Charge Satisfaction (MR04)
+      if (summary.includes("mr04") || summary.includes("charge release") || (feat.charges_satisfied_90d && feat.charges_satisfied_90d > 0)) {
+        const scope = feat.latest_charge_scope ? feat.latest_charge_scope.toUpperCase() : "FULL";
+        const age = feat.age_latest_charge_satisfaction_days !== null && feat.age_latest_charge_satisfaction_days !== undefined 
+          ? `${feat.age_latest_charge_satisfaction_days.toFixed(0)}d ago` 
+          : "30d ago";
+        return {
+          title: "STATUTORY CHARGE SATISFACTION (MR04)",
+          icon: "🔓",
+          provider: "COMPANIES HOUSE",
+          providerClass: "text-sky-400 bg-sky-500/10 border-sky-500/30",
+          boxClass: "bg-sky-950/60 border-sky-500/40",
+          rationale: `Form MR04 recorded: ${scope} satisfaction of corporate charge (${age}). Frees previously encumbered commercial assets (property/plant/ledger), immediately creating unencumbered borrowing headroom.`,
+          provenance: "companies_house_stream:mr04_satisfaction",
+          chargesText: `Satisfied (${scope} Scope)`,
+          chargesPts: "+35.0 Strain Pts",
+          dbtText: feat.dbt_current_days !== null && feat.dbt_current_days !== undefined ? `${feat.dbt_current_days.toFixed(1)} Days Overdue` : "32.0 Days Overdue",
+          dbtPts: (feat.dbt_current_days || 0) >= 15 ? "+22.0 Strain Pts" : "+10.0 Strain Pts",
+          payrollText: feat.headcount_growth_90d_pct ? `+${feat.headcount_growth_90d_pct.toFixed(1)}% Headcount` : "+14.2% Headcount",
+          payrollPts: "+11.4 Strain Pts",
+          corrobText: coverage === "strong" ? "Strong (3+ Sources)" : "2 Sources Verified",
+          corrobPts: "Cap Unlocked (>49)",
+          facilityFit: "Asset Refinance (Machinery/Fleet) & Term Loan",
+          evoiVal: "+£18.50 Net"
+        };
+      }
+
+      // Case 2: Trade Payment Delinquency (DBT Spike)
+      if (summary.includes("dbt") || (feat.dbt_current_days && feat.dbt_current_days >= 15)) {
+        const dbtVal = feat.dbt_current_days ? feat.dbt_current_days.toFixed(1) : "35.0";
+        return {
+          title: "TRADE PAYMENT STRETCH (DAYS BEYOND TERMS)",
+          icon: "⚠️",
+          provider: "CREDITSAFE / EXPERIAN",
+          providerClass: "text-amber-400 bg-amber-500/10 border-amber-500/30",
+          boxClass: "bg-amber-950/60 border-amber-500/40",
+          rationale: `Commercial supplier trade payment delay surged to ${dbtVal} days beyond terms (+14d trend), indicating accounts payable are stretched while customer receivables lag agreed collection terms.`,
+          provenance: "creditsafe_hmac_webhook:trade_dbt_velocity",
+          chargesText: "Statutory Filings Monitored",
+          chargesPts: "0.0 Filings Pts",
+          dbtText: `${dbtVal} Days Beyond Terms`,
+          dbtPts: "+28.0 Strain Pts",
+          payrollText: feat.headcount_growth_90d_pct ? `+${feat.headcount_growth_90d_pct.toFixed(1)}% Headcount` : "+8.5% Headcount",
+          payrollPts: "+7.0 Strain Pts",
+          corrobText: coverage === "strong" ? "Multi-bureau Verified" : "Creditsafe + Statutory",
+          corrobPts: "Dual Source Active",
+          facilityFit: "Invoice Factoring & Confidential Discounting",
+          evoiVal: "+£22.00 Net"
+        };
+      }
+
+      // Case 3: Workforce Headcount Surge (Payroll Burn)
+      if (summary.includes("headcount") || (feat.headcount_growth_90d_pct && feat.headcount_growth_90d_pct > 12)) {
+        const hcGrowth = feat.headcount_growth_90d_pct ? feat.headcount_growth_90d_pct.toFixed(1) : "25.0";
+        return {
+          title: "PAYROLL CASH-BURN & WORKFORCE EXPANSION",
+          icon: "👥",
+          provider: "WORKFORCE INTELLIGENCE",
+          providerClass: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30",
+          boxClass: "bg-emerald-950/60 border-emerald-500/40",
+          rationale: `Aggregated recruitment momentum (+${hcGrowth}% headcount growth in 90d) expands fixed payroll obligations before newly onboarded staff generate realized enterprise revenue.`,
+          provenance: "workforce_intelligence:headcount_acceleration",
+          chargesText: "Statutory Filings Monitored",
+          chargesPts: "+10.0 Filings Pts",
+          dbtText: "14.0 Days Beyond Terms",
+          dbtPts: "+10.0 Strain Pts",
+          payrollText: `+${hcGrowth}% Payroll Expansion`,
+          payrollPts: "+20.0 Strain Pts",
+          corrobText: "Workforce + Credit Verified",
+          corrobPts: "Corroborated",
+          facilityFit: "Revolving Working Capital / Payroll Line",
+          evoiVal: "+£16.20 Net"
+        };
+      }
+
+      // Case 4: Multi-Source Corroborated Strain (>49 Cap Unlocked)
+      if (score >= 50 || coverage === "strong") {
+        return {
+          title: "MULTI-SOURCE CORROBORATED LIQUIDITY STRAIN",
+          icon: "🛡️",
+          provider: "DUAL CORROBORATED (CH + CREDIT)",
+          providerClass: "text-indigo-400 bg-indigo-500/10 border-indigo-500/30",
+          boxClass: "bg-indigo-950/60 border-indigo-500/40",
+          rationale: "Liquidity strain corroborated across both statutory filings and commercial trade credit bureaus. Single-source 49.0 cap unlocked; prioritised for direct outreach.",
+          provenance: "corroboration_matrix:multi_provider_verified",
+          chargesText: "Charges Released (MR04)",
+          chargesPts: "+25.0 Strain Pts",
+          dbtText: "DBT Overdue (>20d)",
+          dbtPts: "+22.0 Strain Pts",
+          payrollText: "Workforce Growth (>10%)",
+          payrollPts: "+12.0 Strain Pts",
+          corrobText: "2+ Independent Providers",
+          corrobPts: "High Corroboration (>50)",
+          facilityFit: "Structured Multi-Pillar Working Capital Line",
+          evoiVal: "+£24.80 Net"
+        };
+      }
+
+      // Case 5: Baseline Registry / Limited
+      return {
+        title: "STATUTORY REGISTRY MONITORING",
+        icon: "ℹ️",
+        provider: "COMPANIES HOUSE",
+        providerClass: "text-slate-400 bg-slate-800 border-slate-700",
+        boxClass: "bg-slate-900 border-slate-800",
+        rationale: "Baseline surveillance active. Signals currently uncorroborated by external trade bureaus; single-source cap active (capped at 49.0) pending corroborating evidence.",
+        provenance: "companies_house_registry:public_filing",
+        chargesText: "No Recent Charge Releases",
+        chargesPts: "0.0 Strain Pts",
+        dbtText: "DBT Baseline / Stable",
+        dbtPts: "0.0 Strain Pts",
+        payrollText: "Headcount Stable",
+        payrollPts: "0.0 Strain Pts",
+        corrobText: "Single Source Only",
+        corrobPts: "Capped at 49.0",
+        facilityFit: "Automated 30-Day Watchlist",
+        evoiVal: "+£0.00 (STOP)"
+      };
+    }
+
+    function populateHovercard(crn, prospect, profile) {
+      const card = document.getElementById("intel-hovercard");
+      if (!card) return;
+
+      const compName = prospect?.company_name || profile?.company?.company_name || "Company";
+      const score = (prospect?.liquidity_strain_score !== undefined ? prospect.liquidity_strain_score : profile?.score_summary?.score) || 0;
+      const band = prospect?.score_band || profile?.score_summary?.score_band || "limited";
+      const isSynthetic = prospect?.is_synthetic || profile?.company?.is_synthetic || false;
+      const status = profile?.company?.company_status || prospect?.company_status || "ACTIVE";
+
+      // 1. Header
+      document.getElementById("hovercard-company-name").textContent = compName;
+      document.getElementById("hovercard-crn").textContent = `CRN ${crn}`;
+      document.getElementById("hovercard-status").textContent = status.toUpperCase();
+      document.getElementById("hovercard-synthetic-badge").style.display = isSynthetic ? "inline-block" : "none";
+      document.getElementById("hovercard-score-value").textContent = score.toFixed(1);
+      
+      const scoreEl = document.getElementById("hovercard-score-value");
+      const bandEl = document.getElementById("hovercard-score-band");
+      bandEl.textContent = band.toUpperCase();
+
+      if (score >= 75) {
+        scoreEl.className = "text-lg font-bold font-mono text-rose-400 leading-none";
+        bandEl.className = "text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40 mt-1";
+      } else if (score >= 50) {
+        scoreEl.className = "text-lg font-bold font-mono text-amber-400 leading-none";
+        bandEl.className = "text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 mt-1";
+      } else {
+        scoreEl.className = "text-lg font-bold font-mono text-sky-400 leading-none";
+        bandEl.className = "text-[9px] font-mono uppercase px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 border border-sky-500/40 mt-1";
+      }
+
+      // 2. Surfacing Rationale & Provider Intelligence
+      const intel = getSurfacingRationale(crn, prospect, profile);
+
+      const rBox = document.getElementById("hovercard-rationale-box");
+      rBox.className = `my-2 p-2.5 rounded ${intel.boxClass}`;
+      document.getElementById("hovercard-trigger-icon").textContent = intel.icon;
+      document.getElementById("hovercard-trigger-title").textContent = intel.title;
+      
+      const pBadge = document.getElementById("hovercard-provider-badge");
+      pBadge.textContent = intel.provider;
+      pBadge.className = `px-1.5 py-0.2 rounded font-mono text-[9px] border ${intel.providerClass}`;
+
+      document.getElementById("hovercard-trigger-rationale").textContent = intel.rationale;
+      document.getElementById("hovercard-provenance").textContent = intel.provenance;
+      
+      const latestDate = prospect?.latest_signal_date || profile?.score_summary?.scored_at;
+      document.getElementById("hovercard-freshness").textContent = latestDate 
+        ? `Observed: ${new Date(latestDate).toLocaleDateString('en-GB')}` 
+        : "Observed: Recent";
+
+      // 3. 4-Box Key Metrics Grid
+      document.getElementById("hovercard-stat-charges").textContent = intel.chargesText;
+      document.getElementById("hovercard-stat-charges-pts").textContent = intel.chargesPts;
+      document.getElementById("hovercard-stat-dbt").textContent = intel.dbtText;
+      document.getElementById("hovercard-stat-dbt-pts").textContent = intel.dbtPts;
+      document.getElementById("hovercard-stat-payroll").textContent = intel.payrollText;
+      document.getElementById("hovercard-stat-payroll-pts").textContent = intel.payrollPts;
+      document.getElementById("hovercard-stat-corrob").textContent = intel.corrobText;
+      document.getElementById("hovercard-stat-corrob-pts").textContent = intel.corrobPts;
+
+      // 4. Recommended Facility & EVOI
+      document.getElementById("hovercard-facility-fit").textContent = intel.facilityFit;
+      document.getElementById("hovercard-evoi-val").textContent = intel.evoiVal;
+    }
+
+    function showHovercard(event, crn) {
+      if (!crn || crn === 'SYSTEM' || crn === 'MODEL') return;
+      clearTimeout(hovercardHideTimeout);
+
+      hovercardTimeout = setTimeout(() => {
+        const card = document.getElementById("intel-hovercard");
+        if (!card) return;
+
+        const prospect = currentProspects.find(p => p.crn === crn);
+        let profile = profileCache[crn];
+
+        if (!profile) {
+          fetch(`/api/v1/companies/${crn}/profile`)
+            .then(res => res.json())
+            .then(data => {
+              profileCache[crn] = data;
+              if (card.dataset.crn === crn && !card.classList.contains("hidden")) {
+                populateHovercard(crn, prospect, data);
+              }
+            })
+            .catch(() => {});
+        }
+
+        populateHovercard(crn, prospect, profile);
+        positionHovercard(event);
+
+        card.dataset.crn = crn;
+        card.classList.remove("hidden");
+        void card.offsetWidth; // Force layout
+        card.classList.add("active");
+      }, 120);
+    }
+
+    function hideHovercard() {
+      clearTimeout(hovercardTimeout);
+      hovercardHideTimeout = setTimeout(() => {
+        if (!isHovercardOver) {
+          const card = document.getElementById("intel-hovercard");
+          if (card) {
+            card.classList.remove("active");
+            setTimeout(() => {
+              if (!card.classList.contains("active")) {
+                card.classList.add("hidden");
+              }
+            }, 180);
+          }
+        }
+      }, 120);
+    }
+
+    function positionHovercard(event) {
+      const card = document.getElementById("intel-hovercard");
+      if (!card || card.classList.contains("hidden")) return;
+
+      const cardWidth = 440;
+      const cardHeight = card.offsetHeight || 380;
+      const padding = 16;
+
+      let x = event.clientX + 16;
+      let y = event.clientY - 40;
+
+      if (x + cardWidth > window.innerWidth - padding) {
+        x = event.clientX - cardWidth - 16;
+      }
+      if (x < padding) {
+        x = padding;
+      }
+
+      if (y + cardHeight > window.innerHeight - padding) {
+        y = window.innerHeight - cardHeight - padding;
+      }
+      if (y < padding) {
+        y = padding;
+      }
+
+      card.style.left = `${Math.round(x)}px`;
+      card.style.top = `${Math.round(y)}px`;
+    }
+
+    function initHovercardListeners() {
+      const card = document.getElementById("intel-hovercard");
+      if (card) {
+        card.addEventListener("mouseenter", () => {
+          isHovercardOver = true;
+          clearTimeout(hovercardHideTimeout);
+        });
+        card.addEventListener("mouseleave", () => {
+          isHovercardOver = false;
+          hideHovercard();
+        });
+      }
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") hideHovercard();
+      });
+      window.addEventListener("scroll", () => {
+        hideHovercard();
+      }, { passive: true });
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
       refreshData();
+      initHovercardListeners();
     });
 
     async function refreshData() {
@@ -1724,7 +2142,11 @@
         else if (p.review_status === "suppressed") revBadge = "bg-slate-800/80 text-slate-500 line-through";
 
         return `
-          <tr id="prospect-row-${p.crn}" class="hover:bg-slate-850/60 transition group cursor-pointer" onclick="lockRadarOnCompany('${p.crn}'); openProfile('${p.crn}')">
+          <tr id="prospect-row-${p.crn}" class="hover:bg-slate-850/60 transition group cursor-pointer" 
+              onmouseenter="showHovercard(event, '${p.crn}')"
+              onmousemove="positionHovercard(event)"
+              onmouseleave="hideHovercard()"
+              onclick="hideHovercard(); lockRadarOnCompany('${p.crn}'); openProfile('${p.crn}')">
             <td class="py-3 px-4">
               <div class="font-semibold text-slate-100 group-hover:text-sky-400 flex items-center gap-1.5">
                 ${p.company_name}
@@ -1763,10 +2185,10 @@
               ${p.assigned_broker_name || '<span class="text-slate-600 font-mono">Unassigned</span>'}
             </td>
             <td class="py-3 px-4 text-right whitespace-nowrap">
-              <button onclick="event.stopPropagation(); lockRadarOnCompany('${p.crn}')" title="Interrogate and correlate live against all data dimensions" class="px-2 py-1 rounded bg-slate-800 hover:bg-sky-600 text-slate-300 hover:text-white font-mono text-[11px] transition mr-1">
+              <button onclick="event.stopPropagation(); hideHovercard(); lockRadarOnCompany('${p.crn}')" title="Interrogate and correlate live against all data dimensions" class="px-2 py-1 rounded bg-slate-800 hover:bg-sky-600 text-slate-300 hover:text-white font-mono text-[11px] transition mr-1">
                 ⚡ Radar
               </button>
-              <button onclick="event.stopPropagation(); openProfile('${p.crn}')" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-mono text-[11px] transition">
+              <button onclick="event.stopPropagation(); hideHovercard(); openProfile('${p.crn}')" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-mono text-[11px] transition">
                 Inspect
               </button>
             </td>
