@@ -1,4 +1,5 @@
 import math
+import json
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 from sqlalchemy.orm import Session
@@ -6,7 +7,10 @@ from sqlalchemy.orm import Session
 from backend.app.core.logging import logger
 from backend.app.models.feature import CompanyFeatureSnapshot
 from backend.app.models.investigation import CommercialOpportunityAssessment
+from backend.app.models.model_prediction import ModelPrediction
 from backend.app.services.feature_store import FeatureStoreService
+from backend.app.services.ml_engine import MachineLearningOpportunityModel
+from backend.app.ml.features import extract_features_dict
 
 COMMERCIAL_MODEL_VERSION = "v1.0.0-rules"
 
@@ -144,4 +148,24 @@ class CommercialOpportunityAssessor:
         self.db.add(assessment)
         self.db.commit()
         self.db.refresh(assessment)
+
+        # Persist model prediction record for shadow tracking & honest verification
+        try:
+            ml_engine = MachineLearningOpportunityModel(self.db)
+            ml_pred = ml_engine.predict_opportunity_probability(snapshot)
+            f_dict = extract_features_dict(snapshot)
+
+            pred_record = ModelPrediction(
+                crn=crn,
+                as_of=as_of_timestamp,
+                model_version=ml_pred.get("model_version", "v1.1.0-ml-shadow"),
+                p_value=float(ml_pred.get("p_funded_ml", p_funded)),
+                rules_p_value=float(p_funded),
+                feature_vector_json=json.dumps(f_dict)
+            )
+            self.db.add(pred_record)
+            self.db.commit()
+        except Exception as e:
+            logger.warning(f"Could not log ModelPrediction shadow record for {crn}: {e}")
+
         return assessment

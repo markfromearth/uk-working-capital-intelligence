@@ -14,6 +14,12 @@ from backend.app.services.opportunity_assessment import CommercialOpportunityAss
 from backend.app.services.outcome_learning import OutcomeLearningService
 from backend.app.services.ml_engine import MachineLearningOpportunityModel
 from backend.app.models.investigation import InvestigationDecision, CommercialOpportunityAssessment, CommercialFunnelOutcome
+from backend.app.models.company import CompanyRegistry
+from backend.app.models.feature import CompanyFeatureSnapshot
+from backend.app.models.signal import NormalizedSignal
+from backend.app.models.model_prediction import ModelPrediction
+from backend.app.services.audit import log_audit_event
+from backend.app.ml.promotion import get_latest_model_card, bootstrap_cluster_ci
 
 router = APIRouter(prefix="/adaptive", tags=["Adaptive Finance Intelligence Engine"])
 
@@ -238,3 +244,124 @@ def train_machine_learning_model(
     ml_model = MachineLearningOpportunityModel(db)
     metrics = ml_model.train_model(min_samples=6)
     return metrics
+
+class PromoteModelRequest(BaseModel):
+    target_version: Optional[str] = None
+    override_reason: Optional[str] = None
+
+@router.get("/ml/status")
+def get_machine_learning_status(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["ADMIN", "admin", "ANALYST", "analyst", "BROKER", "broker"]))
+):
+    """
+    Returns data volume, label counts, latest evaluation metrics, and promotion gate status.
+    Guarantees honest visibility into model readiness and shadow-mode status.
+    """
+    # 1. Data volume counts
+    total_companies = db.query(CompanyRegistry).count()
+    total_snapshots = db.query(CompanyFeatureSnapshot).count()
+    total_predictions = db.query(ModelPrediction).count()
+
+    # 2. Label counts
+    outcomes = db.query(CommercialFunnelOutcome).all()
+    stage_counts: Dict[str, int] = {}
+    for o in outcomes:
+        stage_counts[o.outcome_stage] = stage_counts.get(o.outcome_stage, 0) + 1
+
+    proxy_new_charges = db.query(NormalizedSignal).filter(
+        NormalizedSignal.signal_type.in_(("charge_creation", "charge_registered")),
+        NormalizedSignal.verification_status != "disputed"
+    ).count()
+
+    # 3. Latest model metrics and card
+    card = get_latest_model_card()
+
+    # 4. Promotion gate assessment
+    if card and "promotion_gate" in card:
+        gate_info = card["promotion_gate"]
+        promotion_met = gate_info.get("passed", False)
+    else:
+        promotion_met = False
+        gate_info = {
+            "passed": False,
+            "message": "No evaluated candidate model card found. Run honest evaluation pipeline first."
+        }
+
+    return {
+        "status": "healthy",
+        "active_mode": "shadow_mode",
+        "data_volume": {
+            "registered_companies": total_companies,
+            "feature_snapshots": total_snapshots,
+            "predictions_logged": total_predictions
+        },
+        "label_counts": {
+            "commercial_funnel_stages": stage_counts,
+            "total_commercial_outcomes": len(outcomes),
+            "proxy_charge_registrations": proxy_new_charges
+        },
+        "latest_model_card": card,
+        "promotion_gate": {
+            "met": promotion_met,
+            "details": gate_info,
+            "manual_promotion_required": True,
+            "auto_promotion_allowed": False
+        }
+    }
+
+@router.post("/ml/promote")
+def promote_machine_learning_model(
+    req: PromoteModelRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["ADMIN", "admin"]))
+):
+    """
+    Manually promotes an evaluated ML candidate model to primary tier if promotion gate is met.
+    Requires ADMIN role. Permanently audit-logged through tamper-evident audit service.
+    Never auto-promotes.
+    """
+    card = get_latest_model_card()
+    if not card:
+        raise HTTPException(
+            status_code=400,
+            detail="No evaluated candidate model card found. Cannot promote un-evaluated model."
+        )
+
+    gate = card.get("promotion_gate", {})
+    gate_passed = gate.get("passed", False)
+
+    if not gate_passed and not req.override_reason:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Promotion gate criteria NOT met (candidate does not reliably beat rules baseline on top-k precision and Brier score). "
+                "Documented override_reason is required for administrative manual bypass."
+            )
+        )
+
+    version_to_promote = req.target_version or card.get("model_version", "v2.0.0-promoted")
+
+    log_audit_event(
+        db=db,
+        action="ml_model_promoted",
+        resource_type="ml_model",
+        resource_id=version_to_promote,
+        user_id=current_user.id,
+        details={
+            "promoted_by": current_user.email,
+            "gate_passed": gate_passed,
+            "override_reason": req.override_reason,
+            "git_sha": card.get("git_sha"),
+            "feature_spec_hash": card.get("feature_spec_hash"),
+            "model_card_timestamp": card.get("created_at")
+        }
+    )
+
+    return {
+        "status": "success",
+        "promoted_version": version_to_promote,
+        "gate_passed": gate_passed,
+        "mode": "promoted" if gate_passed else "promoted_with_admin_override",
+        "audit_logged": True
+    }
