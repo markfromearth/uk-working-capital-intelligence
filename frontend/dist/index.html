@@ -134,6 +134,10 @@
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
       Integrations & Health
     </button>
+    <button onclick="switchTab('adaptive')" id="tab-btn-adaptive" class="py-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2">
+      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+      Adaptive Engine & Funnel ROI
+    </button>
   </div>
 
   <!-- Content Areas -->
@@ -252,6 +256,111 @@
                 <tr><td colspan="4" class="p-4 text-center text-slate-500">DLQ is clean. No dropped events.</td></tr>
               </tbody>
             </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 4: ADAPTIVE ENGINE & FUNNEL ROI -->
+    <div id="tab-adaptive" class="h-full flex flex-col p-6 overflow-y-auto hidden">
+      <!-- Funnel ROI KPI Strip -->
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6 shrink-0">
+        <div class="bg-slate-900 border border-slate-800 rounded p-4">
+          <div class="text-[10px] uppercase font-mono text-slate-400">Recorded Outcomes</div>
+          <div id="adaptive-kpi-outcomes" class="text-2xl font-bold font-mono text-slate-100 mt-1">0</div>
+          <div class="text-[10px] text-slate-500 mt-0.5">Commercial Funnel Touchpoints</div>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded p-4">
+          <div class="text-[10px] uppercase font-mono text-slate-400">Funded Facilities</div>
+          <div id="adaptive-kpi-funded-count" class="text-2xl font-bold font-mono text-emerald-400 mt-1">0</div>
+          <div id="adaptive-kpi-conversion" class="text-[10px] text-emerald-400/80 mt-0.5">Conv. Rate: 0.0%</div>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded p-4">
+          <div class="text-[10px] uppercase font-mono text-slate-400">Total Funded Limit</div>
+          <div id="adaptive-kpi-funded-vol" class="text-2xl font-bold font-mono text-sky-400 mt-1">£0.00</div>
+          <div class="text-[10px] text-slate-500 mt-0.5">Gross Facility Volume</div>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded p-4">
+          <div class="text-[10px] uppercase font-mono text-slate-400">Total Broker Revenue</div>
+          <div id="adaptive-kpi-revenue" class="text-2xl font-bold font-mono text-amber-400 mt-1">£0.00</div>
+          <div class="text-[10px] text-slate-500 mt-0.5">Realized Commission Won</div>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 rounded p-4">
+          <div class="text-[10px] uppercase font-mono text-slate-400">Net Commercial ROI</div>
+          <div id="adaptive-kpi-roi" class="text-2xl font-bold font-mono text-emerald-400 mt-1">£0.00</div>
+          <div id="adaptive-kpi-costs" class="text-[10px] text-slate-500 mt-0.5">After £0.00 investigation spend</div>
+        </div>
+      </div>
+
+      <!-- Two column grid: Tool Registry & ML Shadow Model -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Approved Tool Registry -->
+        <div class="bg-slate-900 border border-slate-800 rounded p-5">
+          <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
+            <div>
+              <h3 class="text-sm font-bold font-mono text-slate-100 uppercase">Approved Investigation Tool Registry</h3>
+              <p class="text-xs text-slate-400 mt-0.5">Deterministic capability bounds, transparent query costs & circuit breakers</p>
+            </div>
+            <span class="px-2 py-0.5 text-[10px] font-mono rounded bg-sky-500/10 text-sky-400 border border-sky-500/30">Registry Enforced</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-950 text-slate-400 font-mono text-[10px] uppercase">
+                <tr>
+                  <th class="p-2.5">Tool Name</th>
+                  <th class="p-2.5">Provider</th>
+                  <th class="p-2.5">Fee (£)</th>
+                  <th class="p-2.5">Rate Limit</th>
+                  <th class="p-2.5">Circuit Breaker</th>
+                </tr>
+              </thead>
+              <tbody id="adaptive-tools-tbody" class="divide-y divide-slate-800/80 text-slate-300">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Machine Learning Model & Shadow Calibration -->
+        <div class="bg-slate-900 border border-slate-800 rounded p-5 flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-4 border-b border-slate-800 pb-3">
+              <div>
+                <h3 class="text-sm font-bold font-mono text-indigo-400 uppercase">Supervised Machine Learning Engine</h3>
+                <p class="text-xs text-slate-400 mt-0.5">Shadow Mode: v1.1.0-ml-shadow (CalibratedClassifierCV + HistGradientBoosting)</p>
+              </div>
+              <span class="px-2 py-0.5 text-[10px] font-mono rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/30">Shadow Mode</span>
+            </div>
+
+            <div class="space-y-3 text-xs text-slate-300">
+              <div class="bg-slate-950 p-3 rounded border border-slate-800">
+                <div class="text-[10px] font-mono text-slate-400 uppercase mb-1">Model Architecture & Zero Leakage Protocol</div>
+                <p class="text-slate-300 text-xs leading-relaxed">
+                  Extracts 10 point-in-time features strictly as of historical observation timestamps, preventing target leakage. Model probabilities are calibrated via isotonic regression to maintain defensible, reliable probability bounds (Brier score &lt; 0.25).
+                </p>
+              </div>
+
+              <div class="grid grid-cols-2 gap-3 text-xs">
+                <div class="bg-slate-950 p-3 rounded border border-slate-800">
+                  <div class="text-[10px] font-mono text-slate-400 uppercase">Model Calibration Target</div>
+                  <div class="text-sm font-bold font-mono text-emerald-400 mt-1">Brier &lt; 0.25</div>
+                  <div class="text-[10px] text-slate-500 mt-0.5">Strict reliability guarantee</div>
+                </div>
+                <div class="bg-slate-950 p-3 rounded border border-slate-800">
+                  <div class="text-[10px] font-mono text-slate-400 uppercase">Input Features</div>
+                  <div class="text-sm font-bold font-mono text-slate-200 mt-1">10 Derived Dimensions</div>
+                  <div class="text-[10px] text-slate-500 mt-0.5">Filings, DBT, Workforce</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between">
+            <span class="text-[10px] font-mono text-slate-500">Administrator role required to retrain weights.</span>
+            <button onclick="trainMLModel()" class="px-3.5 py-1.5 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs flex items-center gap-1.5 transition">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+              Train / Calibrate ML Model
+            </button>
           </div>
         </div>
       </div>
@@ -386,6 +495,90 @@
           </div>
         </div>
 
+        <!-- Adaptive Commercial Opportunity & Product Fit -->
+        <div class="bg-slate-950 p-4 rounded border border-slate-800">
+          <div class="flex items-center justify-between mb-3 border-b border-slate-800/80 pb-2">
+            <h3 class="text-xs font-bold text-sky-400 uppercase tracking-wider font-mono flex items-center gap-1.5">
+              <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+              Adaptive Commercial Opportunity & Product Sizing
+            </h3>
+            <span id="modal-ml-shadow-badge" class="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-400 border border-indigo-500/30">ML Shadow Model Active</span>
+          </div>
+
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <div class="bg-slate-900/60 p-3 rounded border border-slate-800">
+              <div class="text-slate-400 text-[10px] font-mono uppercase">P(Qualified Opportunity)</div>
+              <div id="modal-p-opp" class="text-lg font-bold font-mono text-emerald-400 mt-1">--%</div>
+              <div class="text-[10px] text-slate-500 mt-0.5">Borrowing requirement likelihood</div>
+            </div>
+            <div class="bg-slate-900/60 p-3 rounded border border-slate-800">
+              <div class="text-slate-400 text-[10px] font-mono uppercase">P(Funded Facility)</div>
+              <div id="modal-p-funded" class="text-lg font-bold font-mono text-sky-400 mt-1">--%</div>
+              <div id="modal-p-funded-ml" class="text-[10px] text-indigo-400 mt-0.5">ML Shadow: --%</div>
+            </div>
+            <div class="bg-slate-900/60 p-3 rounded border border-slate-800">
+              <div class="text-slate-400 text-[10px] font-mono uppercase">Est. Facility Requirement</div>
+              <div id="modal-est-facility" class="text-lg font-bold font-mono text-slate-100 mt-1">£--</div>
+              <div class="text-[10px] text-slate-500 mt-0.5">Based on payroll scale & DBT</div>
+            </div>
+            <div class="bg-slate-900/60 p-3 rounded border border-slate-800">
+              <div class="text-slate-400 text-[10px] font-mono uppercase">Broker Contribution Fee</div>
+              <div id="modal-est-commission" class="text-lg font-bold font-mono text-amber-400 mt-1">£--</div>
+              <div class="text-[10px] text-slate-500 mt-0.5">Standard 2.0% arrangement fee</div>
+            </div>
+          </div>
+
+          <!-- Product Suitability Sliders -->
+          <div class="space-y-2 bg-slate-900/40 p-3 rounded border border-slate-800/80">
+            <div class="text-[11px] font-mono uppercase text-slate-300 font-bold mb-2">Finance Product Suitability Matrix</div>
+            
+            <div class="flex items-center gap-3 text-xs">
+              <span class="w-32 font-mono text-slate-300 text-[11px]">Invoice Finance:</span>
+              <div class="flex-1 bg-slate-800 rounded-full h-2 overflow-hidden">
+                <div id="meter-invoice-finance" class="bg-sky-500 h-full rounded-full transition-all" style="width: 0%"></div>
+              </div>
+              <span id="meter-invoice-val" class="w-12 font-mono text-right font-semibold text-sky-400">0%</span>
+            </div>
+
+            <div class="flex items-center gap-3 text-xs">
+              <span class="w-32 font-mono text-slate-300 text-[11px]">Asset Refinance:</span>
+              <div class="flex-1 bg-slate-800 rounded-full h-2 overflow-hidden">
+                <div id="meter-asset-refinance" class="bg-indigo-500 h-full rounded-full transition-all" style="width: 0%"></div>
+              </div>
+              <span id="meter-asset-val" class="w-12 font-mono text-right font-semibold text-indigo-400">0%</span>
+            </div>
+
+            <div class="flex items-center gap-3 text-xs">
+              <span class="w-32 font-mono text-slate-300 text-[11px]">Term Loan:</span>
+              <div class="flex-1 bg-slate-800 rounded-full h-2 overflow-hidden">
+                <div id="meter-term-loan" class="bg-emerald-500 h-full rounded-full transition-all" style="width: 0%"></div>
+              </div>
+              <span id="meter-term-val" class="w-12 font-mono text-right font-semibold text-emerald-400">0%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Value-of-Information (EVOI) Investigation Engine -->
+        <div class="bg-slate-950 p-4 rounded border border-slate-800">
+          <div class="flex items-center justify-between mb-3 border-b border-slate-800/80 pb-2">
+            <div>
+              <h3 class="text-xs font-bold text-amber-400 uppercase tracking-wider font-mono flex items-center gap-1.5">
+                <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                Value-of-Information (EVOI) Investigation Decision Engine
+              </h3>
+              <p class="text-[10px] text-slate-400 mt-0.5">Calculates expected commercial utility gain vs API query costs (Daily £5.00 Cap per entity)</p>
+            </div>
+            <button onclick="evaluateCompanyEVOI()" class="px-2.5 py-1 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[11px] font-mono transition flex items-center gap-1">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+              Re-evaluate EVOI
+            </button>
+          </div>
+
+          <div id="evoi-decisions-list" class="space-y-2">
+            <div class="text-slate-500 text-xs font-mono p-2 text-center">Loading EVOI opportunities...</div>
+          </div>
+        </div>
+
         <!-- Signals Provenance Timeline Table -->
         <div class="bg-slate-950 p-4 rounded border border-slate-800">
           <div class="flex items-center justify-between mb-2">
@@ -451,6 +644,49 @@
             <button onclick="submitBrokerReview()" class="px-4 py-2 rounded bg-sky-600 hover:bg-sky-500 text-white font-medium text-xs flex items-center gap-1.5 transition">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
               Commit Review Decision
+            </button>
+          </div>
+        </div>
+
+        <!-- Commercial Funnel Deal Outcome Recording -->
+        <div class="bg-slate-925 p-4 rounded border border-slate-700">
+          <h3 class="text-xs font-bold text-slate-100 uppercase tracking-wider font-mono mb-2 flex items-center gap-1.5">
+            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+            Commercial Funnel Deal Outcome (Continuous Learning Feedback)
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+            <div>
+              <label class="block text-[10px] font-mono text-slate-400 mb-1">Funnel Stage</label>
+              <select id="outcome-stage-select" class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500">
+                <option value="QUALIFIED_CONVERSATION">Qualified Broker Conversation</option>
+                <option value="APPLICATION_SUBMITTED">Lender Application Submitted</option>
+                <option value="FACILITY_OFFERED">Credit Committee Facility Offered</option>
+                <option value="FACILITY_FUNDED">Facility Funded / Completed</option>
+                <option value="CLOSED_LOST">Closed / Disqualified</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] font-mono text-slate-400 mb-1">Funded Facility Type</label>
+              <select id="outcome-facility-type" class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500">
+                <option value="invoice_discounting">Invoice Discounting / Factoring</option>
+                <option value="asset_refinance">Asset Refinance (Machinery / Fleet)</option>
+                <option value="term_loan">Unsecured Term Loan</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[10px] font-mono text-slate-400 mb-1">Funded Volume (£)</label>
+              <input type="number" id="outcome-amount-input" placeholder="e.g. 250000" class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono">
+            </div>
+            <div>
+              <label class="block text-[10px] font-mono text-slate-400 mb-1">Broker Commission Won (£)</label>
+              <input type="number" id="outcome-revenue-input" placeholder="e.g. 5000" class="w-full bg-slate-900 border border-slate-700 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-mono">
+            </div>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] text-slate-500 font-mono">Feedback is fed into time-aware training datasets for calibrated machine learning model retraining.</span>
+            <button onclick="submitCommercialOutcome()" class="px-4 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs flex items-center gap-1.5 transition">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+              Log Commercial Outcome
             </button>
           </div>
         </div>
@@ -670,6 +906,10 @@
         `).join('');
 
         document.getElementById("profile-modal").classList.remove("hidden");
+
+        // Load Adaptive Commercial Assessment & EVOI
+        loadAdaptiveAssessment(crn);
+        evaluateCompanyEVOI(crn);
       } catch (e) {
         console.error("Failed to load company profile", e);
       }
@@ -806,17 +1046,240 @@
       }
     }
 
+    async function getAuthHeader() {
+      let token = localStorage.getItem("wc_auth_token");
+      if (!token) {
+        try {
+          const res = await fetch("/api/v1/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: "broker@commercialfinance.co.uk", password: "FintechBroker2026!" })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            token = data.access_token;
+            localStorage.setItem("wc_auth_token", token);
+          }
+        } catch (e) {
+          console.warn("Auth token acquisition error:", e);
+        }
+      }
+      return token ? { "Authorization": `Bearer ${token}` } : {};
+    }
+
+    async function loadAdaptiveTab() {
+      try {
+        // Load commercial conversion metrics
+        const metRes = await fetch("/api/v1/adaptive/outcomes/metrics");
+        if (metRes.ok) {
+          const m = await metRes.json();
+          document.getElementById("adaptive-kpi-outcomes").textContent = m.total_outcomes_recorded;
+          document.getElementById("adaptive-kpi-funded-count").textContent = m.funded_facilities_count;
+          document.getElementById("adaptive-kpi-conversion").textContent = `Conv. Rate: ${m.conversion_rate_pct}%`;
+          document.getElementById("adaptive-kpi-funded-vol").textContent = `£${(m.total_funded_volume_gbp || 0).toLocaleString('en-GB')}`;
+          document.getElementById("adaptive-kpi-revenue").textContent = `£${m.total_realized_revenue_gbp.toLocaleString('en-GB')}`;
+          document.getElementById("adaptive-kpi-roi").textContent = `£${m.net_commercial_roi_gbp.toLocaleString('en-GB')}`;
+          document.getElementById("adaptive-kpi-costs").textContent = `After £${m.total_investigation_costs_gbp.toLocaleString('en-GB')} investigation spend`;
+        }
+
+        // Load approved tools
+        const toolRes = await fetch("/api/v1/adaptive/tools");
+        if (toolRes.ok) {
+          const tools = await toolRes.json();
+          const tbody = document.getElementById("adaptive-tools-tbody");
+          tbody.innerHTML = tools.map(t => `
+            <tr class="hover:bg-slate-950/60 font-mono text-xs">
+              <td class="p-2.5 font-semibold text-sky-400">${t.tool_name}</td>
+              <td class="p-2.5 text-slate-300 uppercase">${t.provider_name}</td>
+              <td class="p-2.5 text-slate-200">£${t.cost_gbp.toFixed(2)}</td>
+              <td class="p-2.5 text-slate-400">${t.rate_limit_per_min} / min</td>
+              <td class="p-2.5">
+                <span class="px-2 py-0.5 rounded text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                  HEALTHY (CLOSED)
+                </span>
+              </td>
+            </tr>
+          `).join('');
+        }
+      } catch (e) {
+        console.error("Failed to load adaptive dashboard tab", e);
+      }
+    }
+
+    async function loadAdaptiveAssessment(crn) {
+      try {
+        const res = await fetch(`/api/v1/adaptive/assessments/${crn}`);
+        if (!res.ok) return;
+        const d = await res.json();
+
+        document.getElementById("modal-p-opp").textContent = `${(d.p_qualified_opportunity * 100).toFixed(1)}%`;
+        document.getElementById("modal-p-funded").textContent = `${(d.p_conversion_funded * 100).toFixed(1)}%`;
+        document.getElementById("modal-p-funded-ml").textContent = `ML Shadow: ${(d.p_funded_ml_shadow * 100).toFixed(1)}%`;
+        document.getElementById("modal-est-facility").textContent = `£${d.estimated_facility_size_gbp.toLocaleString('en-GB')}`;
+        document.getElementById("modal-est-commission").textContent = `£${d.estimated_commercial_contribution_gbp.toLocaleString('en-GB')}`;
+
+        // Product meters
+        const inv = Math.round(d.product_fit.invoice_finance || 0);
+        const ass = Math.round(d.product_fit.asset_refinance || 0);
+        const trm = Math.round(d.product_fit.term_loan || 0);
+
+        document.getElementById("meter-invoice-finance").style.width = `${inv}%`;
+        document.getElementById("meter-invoice-val").textContent = `${inv}%`;
+
+        document.getElementById("meter-asset-refinance").style.width = `${ass}%`;
+        document.getElementById("meter-asset-val").textContent = `${ass}%`;
+
+        document.getElementById("meter-term-loan").style.width = `${trm}%`;
+        document.getElementById("meter-term-val").textContent = `${trm}%`;
+      } catch (e) {
+        console.error("Failed to load adaptive assessment", e);
+      }
+    }
+
+    async function evaluateCompanyEVOI() {
+      if (!currentCrn) return;
+      const listContainer = document.getElementById("evoi-decisions-list");
+      listContainer.innerHTML = `<div class="text-slate-400 font-mono text-xs p-3">Evaluating EVOI against commercial utility gain...</div>`;
+
+      try {
+        const auth = await getAuthHeader();
+        const res = await fetch(`/api/v1/adaptive/investigate/evaluate/${currentCrn}`, {
+          method: "POST",
+          headers: { ...auth }
+        });
+        if (!res.ok) {
+          listContainer.innerHTML = `<div class="text-rose-400 text-xs font-mono p-2">Failed to evaluate EVOI: ${res.statusText}</div>`;
+          return;
+        }
+
+        const decisions = await res.json();
+        listContainer.innerHTML = decisions.map(d => {
+          let badge = "bg-slate-800 text-slate-400 border-slate-700";
+          let actionBtn = "";
+
+          if (d.decision === "INVESTIGATE") {
+            badge = "bg-emerald-500/20 text-emerald-300 border-emerald-500/40";
+            actionBtn = `<button onclick="executeApprovedTool('${d.tool_name}')" class="px-2.5 py-1 rounded bg-sky-600 hover:bg-sky-500 text-white font-mono text-[11px] transition shrink-0">Execute (+£${d.evoi_value.toFixed(2)})</button>`;
+          } else if (d.decision === "DEFER") {
+            badge = "bg-amber-500/20 text-amber-300 border-amber-500/40";
+          } else if (d.decision === "ESCALATE_HUMAN_REVIEW") {
+            badge = "bg-indigo-500/20 text-indigo-300 border-indigo-500/40";
+            actionBtn = `<button onclick="executeApprovedTool('${d.tool_name}')" class="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-[11px] transition shrink-0">Authorize Query</button>`;
+          }
+
+          return `
+            <div class="bg-slate-900/80 border border-slate-800/80 rounded p-3 flex items-center justify-between gap-3">
+              <div class="flex-1">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="font-mono font-bold text-slate-200 text-xs">${d.tool_name}</span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-mono border ${badge}">${d.decision}</span>
+                  <span class="text-slate-400 font-mono text-[11px]">Fee: £${d.estimated_cost_gbp.toFixed(2)}</span>
+                  <span class="text-sky-400 font-mono text-[11px]">EVOI: £${d.evoi_value >= 0 ? '+' : ''}${d.evoi_value.toFixed(2)}</span>
+                </div>
+                <div class="text-[11px] text-slate-400 leading-snug">${d.decision_rationale}</div>
+              </div>
+              <div>${actionBtn}</div>
+            </div>
+          `;
+        }).join('');
+      } catch (e) {
+        listContainer.innerHTML = `<div class="text-rose-400 text-xs font-mono p-2">Error: ${e.message}</div>`;
+      }
+    }
+
+    async function executeApprovedTool(toolName) {
+      if (!currentCrn) return;
+      try {
+        const auth = await getAuthHeader();
+        const res = await fetch("/api/v1/adaptive/investigate/execute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...auth },
+          body: JSON.stringify({ crn: currentCrn, tool_name: toolName, actor_notes: "Broker investigation execution" })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          alert(`Executed ${toolName}. Ingested ${data.signals_ingested} new signals at £${data.actual_cost_gbp.toFixed(2)} cost.`);
+          await openProfile(currentCrn);
+        } else {
+          alert(`Execution failed: ${data.detail || 'Error'}`);
+        }
+      } catch (e) {
+        alert("Tool execution error: " + e.message);
+      }
+    }
+
+    async function submitCommercialOutcome() {
+      if (!currentCrn) return;
+      const stage = document.getElementById("outcome-stage-select").value;
+      const facility = document.getElementById("outcome-facility-type").value;
+      const amount = parseFloat(document.getElementById("outcome-amount-input").value || "0");
+      const rev = parseFloat(document.getElementById("outcome-revenue-input").value || "0");
+
+      try {
+        const auth = await getAuthHeader();
+        const res = await fetch("/api/v1/adaptive/outcomes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...auth },
+          body: JSON.stringify({
+            crn: currentCrn,
+            outcome_stage: stage,
+            facility_type: facility,
+            funded_amount_gbp: amount,
+            realized_revenue_gbp: rev,
+            feedback_notes: `Logged broker outcome stage: ${stage}`
+          })
+        });
+
+        if (res.ok) {
+          alert(`Commercial outcome logged for CRN ${currentCrn} (${stage}). Model feedback recorded.`);
+          closeProfileModal();
+          await refreshData();
+        } else {
+          const err = await res.json();
+          alert(`Failed to log outcome: ${err.detail || 'Error'}`);
+        }
+      } catch (e) {
+        alert("Submission error: " + e.message);
+      }
+    }
+
+    async function trainMLModel() {
+      try {
+        const auth = await getAuthHeader();
+        const res = await fetch("/api/v1/adaptive/ml/train", {
+          method: "POST",
+          headers: { ...auth }
+        });
+        const data = await res.json();
+        if (res.ok) {
+          alert(`ML Model Training Complete!\nVersion: ${data.model_version}\nSamples: ${data.sample_count}\nROC AUC: ${data.roc_auc}\nBrier Score: ${data.brier_score_calibration}\nCalibration: Isotonic`);
+          await loadAdaptiveTab();
+        } else {
+          alert(`Training failed: ${data.detail || 'Admin role required.'}`);
+        }
+      } catch (e) {
+        alert("ML training trigger error: " + e.message);
+      }
+    }
+
     function switchTab(tab) {
       document.getElementById("tab-prospects").classList.add("hidden");
       document.getElementById("tab-entity-review").classList.add("hidden");
       document.getElementById("tab-integrations").classList.add("hidden");
+      document.getElementById("tab-adaptive").classList.add("hidden");
 
       document.getElementById("tab-btn-prospects").className = "py-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2";
       document.getElementById("tab-btn-entity-review").className = "py-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2";
       document.getElementById("tab-btn-integrations").className = "py-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2";
+      document.getElementById("tab-btn-adaptive").className = "py-3 border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2";
 
       document.getElementById(`tab-${tab}`).classList.remove("hidden");
       document.getElementById(`tab-btn-${tab}`).className = "py-3 border-b-2 border-sky-500 text-sky-400 flex items-center gap-2 font-medium";
+
+      if (tab === "adaptive") {
+        loadAdaptiveTab();
+      }
     }
   </script>
 </body>

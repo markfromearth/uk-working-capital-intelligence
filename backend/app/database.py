@@ -26,7 +26,7 @@ def get_db():
 
 def init_db():
     # Import all models to ensure they are registered with Base metadata
-    from backend.app.models import company, signal, feature, score, user, review  # noqa
+    from backend.app.models import company, signal, feature, score, user, review, investigation  # noqa
     Base.metadata.create_all(bind=engine)
 
     # SQLite migration helper for new columns
@@ -43,4 +43,13 @@ def init_db():
                     conn.exec_driver_sql("ALTER TABLE stream_checkpoints ADD COLUMN gap_to_timepoint VARCHAR(255)")
                 if "gap_detected_at" not in columns:
                     conn.exec_driver_sql("ALTER TABLE stream_checkpoints ADD COLUMN gap_detected_at DATETIME")
+
+            # Check normalized_signals for data restrictions
+            sig_cursor = conn.exec_driver_sql("PRAGMA table_info(normalized_signals)")
+            sig_cols = [row[1] for row in sig_cursor.fetchall()]
+            if sig_cols:
+                if "data_use_restrictions" not in sig_cols:
+                    conn.exec_driver_sql("ALTER TABLE normalized_signals ADD COLUMN data_use_restrictions VARCHAR(255) DEFAULT 'b2b_commercial_finance_only'")
+                if "provenance_details" not in sig_cols:
+                    conn.exec_driver_sql("ALTER TABLE normalized_signals ADD COLUMN provenance_details TEXT")
             conn.commit()

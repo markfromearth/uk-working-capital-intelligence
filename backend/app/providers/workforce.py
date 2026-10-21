@@ -200,5 +200,52 @@ class WorkforceAdapter(IProviderAdapter):
                     "observation_count": obs_count
                 })
             })
+        elif growth_90d_pct <= -10.0:  # Material workforce reduction
+            signals.append({
+                "crn": crn,
+                "signal_type": "headcount_reduction",
+                "source_provider": self.provider_name,
+                "original_event_ref": f"wf-trend-{crn}-{current_dt.strftime('%Y%m')}",
+                "observation_timestamp": current_dt,
+                "value_numeric": growth_90d_pct,
+                "value_text": f"Headcount contracted {abs(growth_90d_pct):.1f}% in 90 days ({hc_90} -> {current_hc} employees)",
+                "value_units": "%",
+                "direction": "strain_increasing",
+                "confidence_score": round(spacing_confidence, 2),
+                "evidence_reference": f"Workforce Observation Series ({obs_count} dated points)",
+                "decay_half_life_days": 90,
+                "verification_status": "verified",
+                "metadata_json": json.dumps({
+                    "current_headcount": current_hc,
+                    "headcount_90d_ago": hc_90,
+                    "growth_30d_pct": round(growth_30d_pct, 1),
+                    "growth_90d_pct": round(growth_90d_pct, 1),
+                    "acceleration_pct": round(acceleration_pct, 1),
+                    "observation_count": obs_count
+                })
+            })
+        else:  # Verified stable observation
+            signals.append({
+                "crn": crn,
+                "signal_type": "headcount_stable",
+                "source_provider": self.provider_name,
+                "original_event_ref": f"wf-audit-{crn}-{current_dt.strftime('%Y%m')}",
+                "observation_timestamp": current_dt,
+                "value_numeric": float(current_hc),
+                "value_text": f"Headcount audit observed {current_hc} active personnel (stable trajectory)",
+                "value_units": "count",
+                "direction": "neutral",
+                "confidence_score": round(spacing_confidence, 2),
+                "evidence_reference": f"Workforce Observation Series ({obs_count} dated points)",
+                "decay_half_life_days": 90,
+                "verification_status": "verified",
+                "metadata_json": json.dumps({
+                    "current_headcount": current_hc,
+                    "headcount_90d_ago": hc_90 or current_hc,
+                    "growth_30d_pct": round(growth_30d_pct, 1),
+                    "growth_90d_pct": round(growth_90d_pct, 1),
+                    "observation_count": obs_count
+                })
+            })
             
         return signals

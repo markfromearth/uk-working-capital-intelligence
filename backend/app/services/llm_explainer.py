@@ -224,11 +224,11 @@ Respond with a valid JSON object matching this schema:
         # Categorize signals
         for s in signals:
             ref = SignalReference(
-                signal_id=s.get("signal_id"),
-                signal_type=s.get("signal_type", "unknown"),
-                source_provider=s.get("source_provider", "unknown"),
-                observation_date=s.get("observation_date", ""),
-                description=s.get("value_text", "")
+                signal_id=str(s.get("signal_id") or ""),
+                signal_type=str(s.get("signal_type") or "unknown"),
+                source_provider=str(s.get("source_provider") or "unknown"),
+                observation_date=str(s.get("observation_date") or ""),
+                description=str(s.get("value_text") or s.get("description") or "Signal observed")
             )
             if s.get("signal_type") in ("charge_satisfaction_mr04", "dbt_increase"):
                 primary_signals.append(ref)

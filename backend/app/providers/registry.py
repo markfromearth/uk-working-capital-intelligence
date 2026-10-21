@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Optional
 from backend.app.providers.base import IProviderAdapter, ProviderStatus
 from backend.app.providers.companies_house import CompaniesHouseAdapter
 from backend.app.providers.creditsafe import CreditsafeAdapter
@@ -21,6 +21,9 @@ class ProviderRegistry:
             "experian": self.experian,
             "workforce_intelligence": self.workforce,
         }
+
+    def get_adapter(self, provider_name: str) -> Optional[IProviderAdapter]:
+        return self.get_all_providers().get(provider_name)
 
     def get_health_summary(self) -> List[ProviderStatus]:
         return [

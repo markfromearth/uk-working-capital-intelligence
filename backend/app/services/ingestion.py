@@ -99,6 +99,11 @@ class IngestionService:
 
         if existing_sig:
             logger.debug(f"Signal already exists: {norm_crn} / {signal_data.get('signal_type')}")
+            if signal_data.get("data_use_restrictions"):
+                existing_sig.data_use_restrictions = signal_data.get("data_use_restrictions")
+            if signal_data.get("provenance_details"):
+                existing_sig.provenance_details = signal_data.get("provenance_details")
+            self.db.commit()
             return existing_sig
 
         signal = NormalizedSignal(
@@ -116,6 +121,8 @@ class IngestionService:
             evidence_reference=signal_data.get("evidence_reference"),
             decay_half_life_days=signal_data.get("decay_half_life_days", 90),
             verification_status=signal_data.get("verification_status", "verified"),
+            data_use_restrictions=signal_data.get("data_use_restrictions", "b2b_commercial_finance_only"),
+            provenance_details=signal_data.get("provenance_details"),
             metadata_json=signal_data.get("metadata_json")
         )
         self.db.add(signal)

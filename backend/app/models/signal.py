@@ -45,6 +45,8 @@ class NormalizedSignal(Base):
     evidence_reference = Column(Text, nullable=True)  # Official URL / filing ID
     decay_half_life_days = Column(Integer, default=90)  # Signal decay policy
     verification_status = Column(String(50), default="verified", index=True)  # verified, provisional, disputed
+    data_use_restrictions = Column(String(255), default="b2b_commercial_finance_only")
+    provenance_details = Column(Text, nullable=True)
     metadata_json = Column(Text, nullable=True)
     created_at = Column(DateTime, default=utcnow)
 

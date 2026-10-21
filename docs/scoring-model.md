@@ -133,3 +133,16 @@ $$S_{\text{final}} = \max(0.0, \, (S_{\text{raw}} \cdot M_{\text{corrob}}) - 15.
 > 3. Does not assess consumer creditworthiness or provide individual credit scoring.
 > 4. Serves purely as an investigative business development prioritization metric for commercial brokers.
 > 5. All commercial decisions must be backed by official company filings, certified accounts, and human underwriting review.
+
+---
+
+## 9. Adaptive Opportunity Assessment & Machine Learning Shadow Mode
+
+In addition to the baseline Liquidity Strain Score v1.0.0, the platform incorporates the **Adaptive Finance Opportunity Engine**:
+
+- **Opportunity Probability $P(\text{Opportunity})$**: Calibrated logistic model assessing the commercial likelihood that the entity requires working capital facility arrangement.
+- **Conversion Probability $P(\text{Funded})$**: Hygiene-adjusted probability of successfully funding a commercial facility.
+- **Product Fit Matrix**: Granular suitability scores for Invoice Discounting, Asset Refinance, and Unsecured Term Loans.
+- **Supervised ML Model (`v1.1.0-ml-shadow`)**: Runs concurrently in shadow mode using `HistGradientBoostingClassifier` with isotonic calibration (`CalibratedClassifierCV`) on time-aware training sets with zero target leakage.
+- **Economic Value of Information (EVOI)**: Dynamically determines whether external credit bureau investigations (£0.10 - £3.00) are justified by expected broker commission gains.
+
