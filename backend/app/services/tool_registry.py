@@ -237,6 +237,9 @@ class ApprovedToolRegistry:
         ingestion = IngestionService(db)
         start_time = time.time()
         
+        from backend.app.ml.evoi_learning import capture_investigation_prior_state, record_investigation_outcome
+        prior_state = capture_investigation_prior_state(db, norm_crn)
+
         try:
             adapter = provider_registry.get_adapter(tool.provider_name)
             signals_found = 0
@@ -304,6 +307,16 @@ class ApprovedToolRegistry:
             db.add(inv_record)
             db.commit()
 
+            # Record empirical outcome for EVOI learning
+            record_investigation_outcome(
+                db=db,
+                investigation_id=inv_record.id,
+                crn=norm_crn,
+                tool_name=tool_name,
+                prior_state=prior_state,
+                tool_success=True
+            )
+
             # Audit record
             log_audit_event(
                 db=db,
@@ -333,6 +346,17 @@ class ApprovedToolRegistry:
             if cb:
                 cb.record_failure()
             logger.error(f"Execution failed for tool '{tool_name}' on CRN {norm_crn}: {e}")
+            try:
+                record_investigation_outcome(
+                    db=db,
+                    investigation_id=None,
+                    crn=norm_crn,
+                    tool_name=tool_name,
+                    prior_state=prior_state,
+                    tool_success=False
+                )
+            except Exception:
+                pass
             return {
                 "success": False,
                 "tool_name": tool_name,

@@ -86,11 +86,20 @@ class ValueOfInformationEngine:
 
             # 3. Decision Utility Calculation:
             # Probability that new evidence alters the broker's action threshold
-            p_action_change = min(0.65, info_gain * 1.5)
+            from backend.app.ml.evoi_learning import get_learned_p_action_change
+            p_prior = min(0.65, info_gain * 1.5)
+            p_action_change, n_runs, is_learned = get_learned_p_action_change(
+                self.db,
+                tool_name=tool.tool_name,
+                snapshot=snapshot,
+                default_prior=p_prior,
+                min_samples=20
+            )
             expected_payoff_delta = p_action_change * DEFAULT_BASE_FACILITY_COMMISSION_ESTIMATE_GBP * 0.05
             
             # Net EVOI: Expected utility gain minus API query fee
             evoi_net = round(expected_payoff_delta - tool.cost_gbp, 2)
+            learned_tag = f" (empirical P(change)={p_action_change:.2f} based on {n_runs} runs)" if is_learned else ""
 
             # 4. Budget & Policy Evaluation
             from backend.app.models.score import LiquidityScoreRecord
@@ -105,7 +114,7 @@ class ValueOfInformationEngine:
                 rationale = f"Estimated API cost (£{tool.cost_gbp:.2f}) exceeds remaining 24h budget (£{budget_remaining:.2f}). Deferred to next budget window."
             elif evoi_net > 0.0 and info_gain >= 0.15:
                 decision = "INVESTIGATE"
-                rationale = f"Positive commercial EVOI (+£{evoi_net:.2f}). High expected uncertainty reduction ({prior_uncertainty:.2f} -> {expected_posterior_uncertainty:.2f})."
+                rationale = f"Positive commercial EVOI (+£{evoi_net:.2f}){learned_tag}. High expected uncertainty reduction ({prior_uncertainty:.2f} -> {expected_posterior_uncertainty:.2f})."
             elif prior_uncertainty >= 0.6 and tool.cost_gbp >= 2.0:
                 decision = "ESCALATE_HUMAN_REVIEW"
                 rationale = f"High uncertainty with substantial API cost (£{tool.cost_gbp:.2f}). Requires broker approval prior to external credit bureau expenditure."
@@ -180,9 +189,19 @@ class ValueOfInformationEngine:
         fs = FeatureStoreService(self.db)
         snapshot = fs.compute_feature_snapshot(crn)
         info_gain, prior_uncertainty, expected_posterior_uncertainty = self._estimate_tool_information_gain(tool, snapshot)
-        p_action_change = min(0.65, info_gain * 1.5)
+        
+        from backend.app.ml.evoi_learning import get_learned_p_action_change
+        p_prior = min(0.65, info_gain * 1.5)
+        p_action_change, n_runs, is_learned = get_learned_p_action_change(
+            self.db,
+            tool_name=tool.tool_name,
+            snapshot=snapshot,
+            default_prior=p_prior,
+            min_samples=20
+        )
         expected_payoff_delta = p_action_change * DEFAULT_BASE_FACILITY_COMMISSION_ESTIMATE_GBP * 0.05
         evoi_net = round(expected_payoff_delta - tool.cost_gbp, 2)
+        learned_tag = f" (empirical P(change)={p_action_change:.2f} based on {n_runs} runs)" if is_learned else ""
 
         from backend.app.models.score import LiquidityScoreRecord
         score_rec = self.db.query(LiquidityScoreRecord).filter(LiquidityScoreRecord.crn == crn).order_by(LiquidityScoreRecord.scored_at.desc()).first()
@@ -196,7 +215,7 @@ class ValueOfInformationEngine:
             rationale = f"Estimated API cost (£{tool.cost_gbp:.2f}) exceeds remaining 24h budget (£{remaining_budget:.2f}). Deferred to next budget window."
         elif evoi_net > 0.0 and info_gain >= 0.15:
             decision = "INVESTIGATE"
-            rationale = f"Positive commercial EVOI (+£{evoi_net:.2f}). High expected uncertainty reduction ({prior_uncertainty:.2f} -> {expected_posterior_uncertainty:.2f})."
+            rationale = f"Positive commercial EVOI (+£{evoi_net:.2f}){learned_tag}. High expected uncertainty reduction ({prior_uncertainty:.2f} -> {expected_posterior_uncertainty:.2f})."
         elif prior_uncertainty >= 0.6 and tool.cost_gbp >= 2.0:
             decision = "ESCALATE_HUMAN_REVIEW"
             rationale = f"High uncertainty with substantial API cost (£{tool.cost_gbp:.2f}). Requires broker approval prior to external credit bureau expenditure."

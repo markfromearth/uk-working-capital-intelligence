@@ -99,3 +99,27 @@ class CommercialFunnelOutcome(Base):
     total_investigation_cost_gbp = Column(Float, default=0.0)
     feedback_notes = Column(Text, nullable=True)
     recorded_at = Column(DateTime, default=utcnow, index=True)
+
+class InvestigationRunLog(Base):
+    """
+    Tracks empirical outcomes of executed investigations to learn actual EVOI information gain.
+    Records prior/posterior tiers, actions, and uncertainty, and whether new evidence shifted broker decision.
+    """
+    __tablename__ = "investigation_run_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    investigation_id = Column(Integer, ForeignKey("investigation_decisions.id", ondelete="SET NULL"), nullable=True, index=True)
+    crn = Column(String(10), ForeignKey("company_registry.crn", ondelete="CASCADE"), nullable=False, index=True)
+    tool_name = Column(String(100), nullable=False, index=True)
+    missingness_pattern = Column(String(100), nullable=True, index=True)
+    
+    prior_action = Column(String(100), nullable=True)
+    posterior_action = Column(String(100), nullable=True)
+    prior_tier = Column(String(50), nullable=True)
+    posterior_tier = Column(String(50), nullable=True)
+    
+    prior_uncertainty = Column(Float, nullable=False, default=0.5)
+    posterior_uncertainty = Column(Float, nullable=False, default=0.5)
+    action_changed = Column(Boolean, nullable=False, default=False)
+    tool_success = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=utcnow, index=True)
