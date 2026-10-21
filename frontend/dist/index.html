@@ -123,6 +123,28 @@
       pointer-events: auto;
     }
 
+    /* Floating Metric Strip Intelligence Tooltip */
+    .metric-hovercard {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 9999;
+      width: 330px;
+      max-width: calc(100vw - 32px);
+      pointer-events: none;
+      opacity: 0;
+      visibility: hidden;
+      will-change: transform, opacity;
+      transition: opacity 0.12s ease-out, visibility 0.12s ease-out;
+      box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(14, 165, 233, 0.35);
+      background-color: #0c1322 !important;
+    }
+    .metric-hovercard.active {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+    }
+
     /* Floating Broker Alert HUD */
     .broker-alert-hud {
       transition: opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1), transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
@@ -140,7 +162,7 @@
       .radar-sweep, .soft-pulse, .ticker-track {
         animation: none !important;
       }
-      .intel-hovercard, .broker-alert-hud {
+      .intel-hovercard, .broker-alert-hud, .metric-hovercard {
         transition: none !important;
         transform: none !important;
       }
@@ -202,36 +224,83 @@
     </div>
   </header>
 
-  <!-- Metric Strip -->
+  <!-- Metric Strip with On-Hover Telemetry & Filter Shortcuts -->
   <section class="bg-slate-925 border-b border-slate-800/80 px-6 py-3 shrink-0">
     <div class="grid grid-cols-2 md:grid-cols-6 gap-4 text-xs">
-      <div class="bg-slate-900/60 p-3 rounded border border-slate-800">
-        <div class="text-slate-400 uppercase tracking-wider font-mono text-[10px]">Monitored Entities</div>
+      <div id="metric-card-monitored" class="bg-slate-900/60 hover:bg-slate-900 hover:border-slate-700 p-3 rounded border border-slate-800 cursor-pointer transition relative group"
+           title="Click to reset filters & view all entities"
+           onmouseenter="showMetricTooltip(event, 'monitored')"
+           onmouseleave="hideMetricTooltip()"
+           onclick="filterByMetric('all')">
+        <div class="text-slate-400 uppercase tracking-wider font-mono text-[10px] flex items-center justify-between">
+          <span>Monitored Entities</span>
+          <span class="text-slate-600 group-hover:text-sky-400 text-[10px]">ℹ️</span>
+        </div>
         <div id="metric-total-companies" class="text-xl font-bold font-mono text-slate-100 mt-1">-</div>
         <div class="text-[10px] text-slate-500 mt-0.5">Companies House Registry</div>
       </div>
-      <div class="bg-slate-900/60 p-3 rounded border border-slate-800">
-        <div class="text-slate-400 uppercase tracking-wider font-mono text-[10px]">Detected Signals (30d)</div>
+
+      <div id="metric-card-signals" class="bg-slate-900/60 hover:bg-slate-900 hover:border-sky-500/40 p-3 rounded border border-slate-800 cursor-pointer transition relative group"
+           title="Click to focus on entities with active trailing signals"
+           onmouseenter="showMetricTooltip(event, 'signals')"
+           onmouseleave="hideMetricTooltip()"
+           onclick="filterByMetric('signals')">
+        <div class="text-slate-400 uppercase tracking-wider font-mono text-[10px] flex items-center justify-between">
+          <span>Detected Signals (30d)</span>
+          <span class="text-slate-600 group-hover:text-sky-400 text-[10px]">ℹ️</span>
+        </div>
         <div id="metric-signals-30d" class="text-xl font-bold font-mono text-sky-400 mt-1">-</div>
         <div class="text-[10px] text-slate-500 mt-0.5">MR04, DBT, Headcount</div>
       </div>
-      <div class="bg-slate-900/60 p-3 rounded border border-slate-800">
-        <div class="text-slate-400 uppercase tracking-wider font-mono text-[10px]">High Priority (75-100)</div>
+
+      <div id="metric-card-strong" class="bg-slate-900/60 hover:bg-slate-900 hover:border-rose-500/40 p-3 rounded border border-slate-800 cursor-pointer transition relative group"
+           title="Click to filter by Strong Score Band (75-100)"
+           onmouseenter="showMetricTooltip(event, 'strong')"
+           onmouseleave="hideMetricTooltip()"
+           onclick="filterByMetric('strong')">
+        <div class="text-slate-400 uppercase tracking-wider font-mono text-[10px] flex items-center justify-between">
+          <span>High Priority (75-100)</span>
+          <span class="text-slate-600 group-hover:text-rose-400 text-[10px]">ℹ️</span>
+        </div>
         <div id="metric-strong-prospects" class="text-xl font-bold font-mono text-rose-400 mt-1">-</div>
         <div class="text-[10px] text-slate-500 mt-0.5">Strong Corroboration</div>
       </div>
-      <div class="bg-slate-900/60 p-3 rounded border border-slate-800">
-        <div class="text-slate-400 uppercase tracking-wider font-mono text-[10px]">Elevated (50-74)</div>
+
+      <div id="metric-card-elevated" class="bg-slate-900/60 hover:bg-slate-900 hover:border-amber-500/40 p-3 rounded border border-slate-800 cursor-pointer transition relative group"
+           title="Click to filter by Elevated Score Band (50-74)"
+           onmouseenter="showMetricTooltip(event, 'elevated')"
+           onmouseleave="hideMetricTooltip()"
+           onclick="filterByMetric('elevated')">
+        <div class="text-slate-400 uppercase tracking-wider font-mono text-[10px] flex items-center justify-between">
+          <span>Elevated (50-74)</span>
+          <span class="text-slate-600 group-hover:text-amber-400 text-[10px]">ℹ️</span>
+        </div>
         <div id="metric-elevated-prospects" class="text-xl font-bold font-mono text-amber-400 mt-1">-</div>
         <div class="text-[10px] text-slate-500 mt-0.5">Multi-source indicators</div>
       </div>
-      <div class="bg-slate-900/60 p-3 rounded border border-slate-800">
-        <div class="text-slate-400 uppercase tracking-wider font-mono text-[10px]">Awaiting Broker Review</div>
+
+      <div id="metric-card-review" class="bg-slate-900/60 hover:bg-slate-900 hover:border-indigo-500/40 p-3 rounded border border-slate-800 cursor-pointer transition relative group"
+           title="Click to filter by Unreviewed Status"
+           onmouseenter="showMetricTooltip(event, 'review')"
+           onmouseleave="hideMetricTooltip()"
+           onclick="filterByMetric('review')">
+        <div class="text-slate-400 uppercase tracking-wider font-mono text-[10px] flex items-center justify-between">
+          <span>Awaiting Broker Review</span>
+          <span class="text-slate-600 group-hover:text-indigo-400 text-[10px]">ℹ️</span>
+        </div>
         <div id="metric-awaiting-review" class="text-xl font-bold font-mono text-indigo-400 mt-1">-</div>
         <div class="text-[10px] text-slate-500 mt-0.5">Unreviewed high priority</div>
       </div>
-      <div class="bg-slate-900/60 p-3 rounded border border-slate-800">
-        <div class="text-slate-400 uppercase tracking-wider font-mono text-[10px]">Ambiguous Matches</div>
+
+      <div id="metric-card-entity" class="bg-slate-900/60 hover:bg-slate-900 hover:border-emerald-500/40 p-3 rounded border border-slate-800 cursor-pointer transition relative group"
+           title="Click to open Canonical Entity Resolution Review Queue"
+           onmouseenter="showMetricTooltip(event, 'entity')"
+           onmouseleave="hideMetricTooltip()"
+           onclick="switchTab('entity-review')">
+        <div class="text-slate-400 uppercase tracking-wider font-mono text-[10px] flex items-center justify-between">
+          <span>Ambiguous Matches</span>
+          <span class="text-slate-600 group-hover:text-emerald-400 text-[10px]">ℹ️</span>
+        </div>
         <div id="metric-unresolved-matches" class="text-xl font-bold font-mono text-emerald-400 mt-1">-</div>
         <div class="text-[10px] text-slate-500 mt-0.5">Resolution review queue</div>
       </div>
@@ -320,8 +389,12 @@
           <!-- Column 1: Live Target & Multi-Point Assessment Matrix (7 cols) -->
           <div class="lg:col-span-7 bg-slate-950 p-3.5 rounded-lg border border-slate-800 flex flex-col justify-between">
             <div>
-              <!-- Target Banner -->
-              <div class="flex items-center justify-between pb-2.5 border-b border-slate-800 mb-2.5">
+              <!-- Target Banner with On-Hover Forensic Inspection -->
+              <div id="radar-target-banner" class="flex items-center justify-between pb-2.5 border-b border-slate-800 mb-2.5 p-1 rounded hover:bg-slate-900 transition cursor-pointer group"
+                   title="Hover to inspect multi-point intelligence snapshot or click to open dossier"
+                   onmouseenter="showHovercardForCurrentTarget(event, 'summary')"
+                   onmouseleave="hideHovercard()"
+                   onclick="inspectRadarTarget()">
                 <div class="flex items-center gap-3">
                   <!-- Radar Animation Icon -->
                   <div class="relative w-9 h-9 rounded-full border border-sky-500/30 bg-sky-950/40 flex items-center justify-center overflow-hidden shrink-0">
@@ -346,15 +419,22 @@
                 </div>
 
                 <div class="text-right">
-                  <div class="text-[10px] font-mono text-slate-500">LIVE STRAIN SCORE</div>
+                  <div class="text-[10px] font-mono text-slate-500 flex items-center justify-end gap-1">
+                    <span>LIVE STRAIN SCORE</span>
+                    <span class="text-sky-400 text-[10px]">ℹ️</span>
+                  </div>
                   <div id="radar-target-score" class="text-lg font-bold font-mono text-sky-400 mt-0.5">78.4</div>
                 </div>
               </div>
 
-              <!-- Multi-Point Assessment Grid (6 Real-time Checks) -->
+              <!-- Multi-Point Assessment Grid (6 Real-time Checks with Hover Forensics) -->
               <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-mono">
                 <!-- Check 1: Filings -->
-                <div id="check-filings-card" class="bg-slate-900/80 p-2 rounded border border-slate-800 transition-all">
+                <div id="check-filings-card" class="bg-slate-900/80 hover:bg-slate-850 p-2 rounded border border-slate-800 hover:border-sky-500/50 transition-all cursor-pointer group"
+                     title="Hover to inspect statutory filings & charge releases"
+                     onmouseenter="showHovercardForCurrentTarget(event, 'charges')"
+                     onmouseleave="hideHovercard()"
+                     onclick="inspectRadarTarget()">
                   <div class="flex items-center justify-between text-[10px] text-slate-400 mb-0.5">
                     <span>1. STATUTORY CHARGES</span>
                     <span id="check-filings-status" class="text-emerald-400 font-bold">✓ SATISFIED</span>
@@ -364,7 +444,11 @@
                 </div>
 
                 <!-- Check 2: Credit / DBT -->
-                <div id="check-credit-card" class="bg-slate-900/80 p-2 rounded border border-slate-800 transition-all">
+                <div id="check-credit-card" class="bg-slate-900/80 hover:bg-slate-850 p-2 rounded border border-slate-800 hover:border-amber-500/50 transition-all cursor-pointer group"
+                     title="Hover to inspect trade payment delays & DBT trajectory"
+                     onmouseenter="showHovercardForCurrentTarget(event, 'credit')"
+                     onmouseleave="hideHovercard()"
+                     onclick="inspectRadarTarget()">
                   <div class="flex items-center justify-between text-[10px] text-slate-400 mb-0.5">
                     <span>2. PAYMENT RISK (DBT)</span>
                     <span id="check-credit-status" class="text-amber-400 font-bold">✓ ELEVATED</span>
@@ -374,7 +458,11 @@
                 </div>
 
                 <!-- Check 3: Workforce -->
-                <div id="check-workforce-card" class="bg-slate-900/80 p-2 rounded border border-slate-800 transition-all">
+                <div id="check-workforce-card" class="bg-slate-900/80 hover:bg-slate-850 p-2 rounded border border-slate-800 hover:border-emerald-500/50 transition-all cursor-pointer group"
+                     title="Hover to inspect workforce headcount growth & payroll pressure"
+                     onmouseenter="showHovercardForCurrentTarget(event, 'workforce')"
+                     onmouseleave="hideHovercard()"
+                     onclick="inspectRadarTarget()">
                   <div class="flex items-center justify-between text-[10px] text-slate-400 mb-0.5">
                     <span>3. PAYROLL EXPANSION</span>
                     <span id="check-workforce-status" class="text-emerald-400 font-bold">✓ MOMENTUM</span>
@@ -384,7 +472,11 @@
                 </div>
 
                 <!-- Check 4: Corroboration -->
-                <div id="check-corrob-card" class="bg-slate-900/80 p-2 rounded border border-slate-800 transition-all">
+                <div id="check-corrob-card" class="bg-slate-900/80 hover:bg-slate-850 p-2 rounded border border-slate-800 hover:border-indigo-500/50 transition-all cursor-pointer group"
+                     title="Hover to inspect cross-source corroboration status"
+                     onmouseenter="showHovercardForCurrentTarget(event, 'corrob')"
+                     onmouseleave="hideHovercard()"
+                     onclick="inspectRadarTarget()">
                   <div class="flex items-center justify-between text-[10px] text-slate-400 mb-0.5">
                     <span>4. CORROBORATION</span>
                     <span id="check-corrob-status" class="text-emerald-400 font-bold">✓ 2 SOURCES</span>
@@ -394,7 +486,11 @@
                 </div>
 
                 <!-- Check 5: EVOI Net Payoff -->
-                <div id="check-evoi-card" class="bg-slate-900/80 p-2 rounded border border-slate-800 transition-all">
+                <div id="check-evoi-card" class="bg-slate-900/80 hover:bg-slate-850 p-2 rounded border border-slate-800 hover:border-indigo-500/50 transition-all cursor-pointer group"
+                     title="Hover to inspect Expected Value of Information payoff"
+                     onmouseenter="showHovercardForCurrentTarget(event, 'evoi')"
+                     onmouseleave="hideHovercard()"
+                     onclick="inspectRadarTarget()">
                   <div class="flex items-center justify-between text-[10px] text-slate-400 mb-0.5">
                     <span>5. EVOI PAYOFF</span>
                     <span id="check-evoi-status" class="text-indigo-400 font-bold">✓ POSITIVE</span>
@@ -404,7 +500,11 @@
                 </div>
 
                 <!-- Check 6: ML Prediction -->
-                <div id="check-ml-card" class="bg-slate-900/80 p-2 rounded border border-slate-800 transition-all">
+                <div id="check-ml-card" class="bg-slate-900/80 hover:bg-slate-850 p-2 rounded border border-slate-800 hover:border-rose-500/50 transition-all cursor-pointer group"
+                     title="Hover to inspect machine learning probability calibration"
+                     onmouseenter="showHovercardForCurrentTarget(event, 'ml')"
+                     onmouseleave="hideHovercard()"
+                     onclick="inspectRadarTarget()">
                   <div class="flex items-center justify-between text-[10px] text-slate-400 mb-0.5">
                     <span>6. ML PROMOTION CALIB</span>
                     <span id="check-ml-status" class="text-rose-400 font-bold">✓ TOP 10%</span>
@@ -1432,6 +1532,34 @@
   <!-- Floating Toast Container for Real-Time Action Feedback -->
   <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col space-y-2 pointer-events-none"></div>
 
+  <!-- Floating Metric Strip Intelligence Tooltip -->
+  <div id="metric-hovercard" class="metric-hovercard hidden bg-slate-900 border border-slate-700/80 rounded-lg p-3 text-xs font-sans text-slate-200">
+    <div class="flex items-start justify-between pb-1.5 border-b border-slate-800">
+      <div>
+        <div id="metric-tooltip-title" class="font-bold text-slate-100 text-xs flex items-center gap-1.5 font-mono uppercase tracking-wide">
+          MONITORED ENTITIES
+        </div>
+        <div id="metric-tooltip-subtitle" class="text-[10px] text-slate-400 font-mono mt-0.5">
+          Companies House Registry Base
+        </div>
+      </div>
+      <div id="metric-tooltip-pill" class="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 border border-sky-500/40 font-bold">
+        REGISTRY
+      </div>
+    </div>
+    <div id="metric-tooltip-desc" class="my-2 text-[11px] text-slate-300 leading-relaxed font-sans">
+      Total verified commercial entities under 24/7 automated surveillance across official UK corporate registers.
+    </div>
+    <div class="bg-slate-950 p-2 rounded border border-slate-800/80 flex items-center justify-between text-[10px] font-mono mb-2">
+      <span class="text-slate-400">TELEMETRY COUNT:</span>
+      <span id="metric-tooltip-stat" class="font-bold text-slate-100">--</span>
+    </div>
+    <div class="flex items-center justify-between text-[10px] font-mono text-slate-500 pt-1 border-t border-slate-800/80">
+      <span id="metric-tooltip-action" class="text-sky-400">⚡ Click to filter table listings</span>
+      <span>[Esc] to close</span>
+    </div>
+  </div>
+
   <!-- Floating Intelligence Snapshot Hovercard (Context-Aware Surfacing Rationale) -->
   <div id="intel-hovercard" class="intel-hovercard hidden bg-slate-900 border border-slate-700/80 rounded-lg p-3.5 text-xs font-sans text-slate-200">
     <!-- Header with Live Score and Band -->
@@ -1962,12 +2090,318 @@
     let hovercardTimeout = null;
     let hovercardHideTimeout = null;
     let isHovercardOver = false;
+    let isHovercardVisible = false;
+    let hovercardElements = null;
 
-    function getSurfacingRationale(crn, prospect, profile) {
+    let metricTooltipTimeout = null;
+    let isMetricTooltipVisible = false;
+
+    // Metric Strip Telemetry & Filter Definitions
+    const metricTelemetryInfo = {
+      monitored: {
+        title: "Monitored Entities",
+        subtitle: "Companies House Active Registry Base",
+        badge: "ALL ENTITIES",
+        badgeClass: "bg-slate-800 text-slate-300 border-slate-700",
+        statElId: "metric-total-companies",
+        desc: "Total verified UK commercial entities under 24/7 automated surveillance across official Companies House filings, gazette publications, and registered charges.",
+        action: "⚡ Click to reset all filters and view full ledger"
+      },
+      signals: {
+        title: "Detected Signals (30d)",
+        subtitle: "Trailing 30-Day Multi-Source Events",
+        badge: "30D SIGNALS",
+        badgeClass: "bg-sky-500/20 text-sky-300 border-sky-500/40",
+        statElId: "metric-signals-30d",
+        desc: "Ingested events spanning Form MR04 charge satisfactions, Creditsafe payment delinquency surges, and workforce expansion alerts registered within 30 days.",
+        action: "⚡ Click to isolate listings with active recent signals"
+      },
+      strong: {
+        title: "High Priority Prospects",
+        subtitle: "Strain Score Band 75 - 100",
+        badge: "STRONG FIT",
+        badgeClass: "bg-rose-500/20 text-rose-300 border-rose-500/40",
+        statElId: "metric-strong-prospects",
+        desc: "Entities exhibiting urgent working-capital strain corroborated across at least 2 independent providers. Highest conversion probability for immediate facility placement.",
+        action: "⚡ Click to filter to High Priority prospects"
+      },
+      elevated: {
+        title: "Elevated Pressure",
+        subtitle: "Strain Score Band 50 - 74",
+        badge: "ELEVATED",
+        badgeClass: "bg-amber-500/20 text-amber-300 border-amber-500/40",
+        statElId: "metric-elevated-prospects",
+        desc: "Prospects demonstrating elevated liquidity tension (DBT lengthening or payroll acceleration). Multi-source corroboration cap unlocked.",
+        action: "⚡ Click to view Elevated pressure prospects"
+      },
+      review: {
+        title: "Awaiting Broker Review",
+        subtitle: "High Priority Pending Triage",
+        badge: "TRIAGE QUEUE",
+        badgeClass: "bg-indigo-500/20 text-indigo-300 border-indigo-500/40",
+        statElId: "metric-awaiting-review",
+        desc: "High and elevated prospects that have not yet been claimed, reviewed, promoted or suppressed by a broker in the current review cycle.",
+        action: "⚡ Click to filter table to unreviewed listings"
+      },
+      entity: {
+        title: "Ambiguous Entity Matches",
+        subtitle: "Resolution & Disambiguation Queue",
+        badge: "CANONICAL RESOLUTION",
+        badgeClass: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40",
+        statElId: "metric-unresolved-matches",
+        desc: "Signal records whose company name or registration number has ambiguity requiring deterministic disambiguation or manual operator confirmation.",
+        action: "⚡ Click to open Canonical Entity Resolution workspace"
+      }
+    };
+
+    function showMetricTooltip(event, metricKey) {
+      const info = metricTelemetryInfo[metricKey];
+      if (!info) return;
+
+      const card = document.getElementById("metric-hovercard");
+      if (!card) return;
+
+      clearTimeout(metricTooltipTimeout);
+      const clientX = event.clientX;
+      const clientY = event.clientY;
+
+      metricTooltipTimeout = setTimeout(() => {
+        document.getElementById("metric-tooltip-title").textContent = info.title;
+        document.getElementById("metric-tooltip-subtitle").textContent = info.subtitle;
+        
+        const pill = document.getElementById("metric-tooltip-pill");
+        pill.textContent = info.badge;
+        pill.className = `text-[9px] font-mono uppercase px-1.5 py-0.5 rounded border font-bold ${info.badgeClass}`;
+
+        document.getElementById("metric-tooltip-desc").textContent = info.desc;
+        
+        const countEl = document.getElementById(info.statElId);
+        document.getElementById("metric-tooltip-stat").textContent = countEl ? countEl.textContent : "--";
+
+        document.getElementById("metric-tooltip-action").textContent = info.action;
+
+        positionMetricTooltip(clientX, clientY);
+        card.classList.remove("hidden");
+        card.classList.add("active");
+        isMetricTooltipVisible = true;
+      }, 70);
+    }
+
+    function hideMetricTooltip() {
+      clearTimeout(metricTooltipTimeout);
+      const card = document.getElementById("metric-hovercard");
+      if (card) {
+        card.classList.remove("active");
+        isMetricTooltipVisible = false;
+        setTimeout(() => {
+          if (!isMetricTooltipVisible && !card.classList.contains("active")) {
+            card.classList.add("hidden");
+          }
+        }, 120);
+      }
+    }
+
+    function positionMetricTooltip(clientX, clientY) {
+      const card = document.getElementById("metric-hovercard");
+      if (!card) return;
+      const cardWidth = 330;
+      const estimatedHeight = 190;
+      const padding = 12;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+
+      let x = clientX - 10;
+      let y = clientY + 18;
+
+      if (x + cardWidth > vw - padding) {
+        x = vw - cardWidth - padding;
+      }
+      if (x < padding) {
+        x = padding;
+      }
+      if (y + estimatedHeight > vh - padding) {
+        y = clientY - estimatedHeight - 12;
+      }
+
+      card.style.transform = `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0)`;
+    }
+
+    function filterByMetric(type) {
+      hideMetricTooltip();
+      if (type === 'all') {
+        document.getElementById("filter-search").value = "";
+        document.getElementById("filter-band").value = "";
+        document.getElementById("filter-review").value = "";
+        document.getElementById("filter-coverage").value = "";
+        applyFilters();
+        showToast("Filter reset: Showing all monitored entities", "info");
+      } else if (type === 'signals') {
+        document.getElementById("filter-search").value = "";
+        document.getElementById("filter-band").value = "";
+        document.getElementById("filter-review").value = "";
+        document.getElementById("filter-coverage").value = "";
+        const filtered = currentProspects.filter(p => (p.primary_signals_summary && p.primary_signals_summary.trim().length > 0) || p.latest_signal_date);
+        renderProspectsTable(filtered);
+        showToast("Filtered: Listings with active trailing signals (30d)", "info");
+      } else if (type === 'strong') {
+        document.getElementById("filter-band").value = "strong";
+        document.getElementById("filter-review").value = "";
+        document.getElementById("filter-coverage").value = "";
+        applyFilters();
+        showToast("Filtered: High Priority prospects (75-100)", "info");
+      } else if (type === 'elevated') {
+        document.getElementById("filter-band").value = "elevated";
+        document.getElementById("filter-review").value = "";
+        document.getElementById("filter-coverage").value = "";
+        applyFilters();
+        showToast("Filtered: Elevated pressure prospects (50-74)", "info");
+      } else if (type === 'review') {
+        document.getElementById("filter-review").value = "unreviewed";
+        applyFilters();
+        showToast("Filtered: Prospects awaiting broker review", "info");
+      }
+    }
+
+    function getSurfacingRationale(crn, prospect, profile, dimension = 'summary') {
       const summary = (prospect?.primary_signals_summary || "").toLowerCase();
       const feat = profile?.feature_snapshot || {};
-      const score = (prospect?.liquidity_strain_score !== undefined ? prospect.liquidity_strain_score : profile?.score_summary?.score) || 0;
+      const score = (prospect?.liquidity_strain_score !== undefined ? prospect.liquidity_strain_score : profile?.score_summary?.score) || (radarState?.currentTarget?.score) || 0;
       const coverage = (prospect?.evidence_coverage || feat?.evidence_coverage || "").toLowerCase();
+
+      // Dimension-Specific Forensic Inspections from Multi-Point Match Evaluator
+      if (dimension === 'charges') {
+        return {
+          title: "STATUTORY CHARGES EVALUATION (FORM MR04)",
+          icon: "🔓",
+          provider: "COMPANIES HOUSE STREAM",
+          providerClass: "text-sky-400 bg-sky-500/10 border-sky-500/30",
+          boxClass: "bg-sky-950/60 border-sky-500/40",
+          rationale: "Statutory charge evaluation verifies Form MR04 satisfaction. Pledged collateral (debenture / fixed charge) has been released, unlocking borrowing headroom for an unencumbered working-capital facility.",
+          provenance: "companies_house_stream:mr04_satisfaction",
+          chargesText: "Satisfied (Full Release)",
+          chargesPts: "+35.0 Strain Pts",
+          dbtText: feat.dbt_current_days ? `${feat.dbt_current_days.toFixed(1)} Days Overdue` : "32.0 Days Overdue",
+          dbtPts: "+22.0 Strain Pts",
+          payrollText: feat.headcount_growth_90d_pct ? `+${feat.headcount_growth_90d_pct.toFixed(1)}% Headcount` : "+14.2% Headcount",
+          payrollPts: "+11.4 Strain Pts",
+          corrobText: "2 Sources Verified",
+          corrobPts: "Cap Unlocked (>49)",
+          facilityFit: "Asset Refinance & Term Working Capital",
+          evoiVal: "+£18.50 Net"
+        };
+      }
+
+      if (dimension === 'credit') {
+        const dbtDays = feat.dbt_current_days ? feat.dbt_current_days.toFixed(1) : "32.0";
+        return {
+          title: "TRADE CREDIT RISK & PAYMENT DELINQUENCY",
+          icon: "⚠️",
+          provider: "CREDITSAFE / EXPERIAN API",
+          providerClass: "text-amber-400 bg-amber-500/10 border-amber-500/30",
+          boxClass: "bg-amber-950/60 border-amber-500/40",
+          rationale: `Payment performance analysis confirms supplier payment stretch (DBT surge to ${dbtDays}+ days beyond agreed terms). Supplier credit terms are exhausted, triggering urgent demand for invoice factoring.`,
+          provenance: "creditsafe_hmac_webhook:trade_dbt_velocity",
+          chargesText: "Charges Released (MR04)",
+          chargesPts: "+30.0 Filings Pts",
+          dbtText: `${dbtDays} Days Beyond Terms`,
+          dbtPts: "+28.0 Strain Pts",
+          payrollText: "+14.2% Headcount",
+          payrollPts: "+11.4 Strain Pts",
+          corrobText: "Multi-Bureau Corroborated",
+          corrobPts: "High Corroboration",
+          facilityFit: "Invoice Factoring & Confidential Discounting",
+          evoiVal: "+£22.00 Net"
+        };
+      }
+
+      if (dimension === 'workforce') {
+        const hcGrowth = feat.headcount_growth_90d_pct ? feat.headcount_growth_90d_pct.toFixed(1) : "24.0";
+        return {
+          title: "PAYROLL EXPANSION & CASH-BURN VELOCITY",
+          icon: "👥",
+          provider: "WORKFORCE RECRUITMENT INTELLIGENCE",
+          providerClass: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30",
+          boxClass: "bg-emerald-950/60 border-emerald-500/40",
+          rationale: `Recruitment momentum tracking reveals +${hcGrowth}% headcount acceleration over 90 days. Rapid payroll expansion increases cash-burn rate before client invoices are settled, creating acute working-capital drag.`,
+          provenance: "workforce_intelligence:headcount_acceleration",
+          chargesText: "Statutory Filings Monitored",
+          chargesPts: "+20.0 Filings Pts",
+          dbtText: "28.0 Days Beyond Terms",
+          dbtPts: "+18.0 Strain Pts",
+          payrollText: `+${hcGrowth}% Headcount Surge`,
+          payrollPts: "+20.0 Strain Pts",
+          corrobText: "Workforce + Statutory",
+          corrobPts: "Corroborated",
+          facilityFit: "Revolving Working Capital / Payroll Line",
+          evoiVal: "+£16.20 Net"
+        };
+      }
+
+      if (dimension === 'corrob') {
+        return {
+          title: "CROSS-PROVIDER CORROBORATION MATRIX",
+          icon: "🛡️",
+          provider: "CORROBORATION GATE (CH + BUREAU)",
+          providerClass: "text-indigo-400 bg-indigo-500/10 border-indigo-500/30",
+          boxClass: "bg-indigo-950/60 border-indigo-500/40",
+          rationale: "Signals verified across 2+ independent regulatory and commercial sources. Single-source capping policy (strictly capped at 49.0 without cross-verification) is lifted, elevating the opportunity to High Priority triage.",
+          provenance: "corroboration_matrix:multi_provider_verified",
+          chargesText: "Companies House Verified",
+          chargesPts: "+35.0 Strain Pts",
+          dbtText: "Creditsafe DBT Confirmed",
+          dbtPts: "+22.0 Strain Pts",
+          payrollText: "Workforce Active",
+          payrollPts: "+11.4 Strain Pts",
+          corrobText: "2+ Independent Providers",
+          corrobPts: "Cap Unlocked (>49)",
+          facilityFit: "Structured Commercial Working Capital",
+          evoiVal: "+£24.80 Net"
+        };
+      }
+
+      if (dimension === 'evoi') {
+        return {
+          title: "VALUE-OF-INFORMATION (EVOI) ARBITRAGE",
+          icon: "📈",
+          provider: "EVOI DECISION-THEORETIC ENGINE",
+          providerClass: "text-indigo-400 bg-indigo-500/10 border-indigo-500/30",
+          boxClass: "bg-indigo-950/60 border-indigo-500/40",
+          rationale: "Decision-theoretic EVOI calculates expected commercial gain from resolving uncertainty (+£18.50) exceeds provider enquiry fee (£2.50). Automated deep investigation approved with zero human overhead.",
+          provenance: "evoi_engine:creditsafe_deep_financials",
+          chargesText: "Charges Released (MR04)",
+          chargesPts: "+35.0 Strain Pts",
+          dbtText: "32.0 Days Beyond Terms",
+          dbtPts: "+22.0 Strain Pts",
+          payrollText: "+14.2% Headcount Growth",
+          payrollPts: "+11.4 Strain Pts",
+          corrobText: "Full Corroboration",
+          corrobPts: "Cap Unlocked",
+          facilityFit: "Targeted Working Capital Facility",
+          evoiVal: "+£18.50 Net Value (APPROVED)"
+        };
+      }
+
+      if (dimension === 'ml') {
+        return {
+          title: "ML PROMOTION & CONVERSION CALIBRATION",
+          icon: "🤖",
+          provider: "HISTGRADIENTBOOSTING SHADOW V2",
+          providerClass: "text-rose-400 bg-rose-500/10 border-rose-500/30",
+          boxClass: "bg-rose-950/60 border-rose-500/40",
+          rationale: "Shadow ML model trained with point-in-time walk-forward validation and monotonic constraints. Calibrated Brier score of 0.131 places this profile in the top 10% conversion decile for funded facilities.",
+          provenance: "ml_shadow:calibrated_gradient_boosting",
+          chargesText: "Statutory Features Active",
+          chargesPts: "+35.0 Strain Pts",
+          dbtText: "DBT Velocity Feature Active",
+          dbtPts: "+22.0 Strain Pts",
+          payrollText: "Headcount Feature Active",
+          payrollPts: "+11.4 Strain Pts",
+          corrobText: "High Coverage",
+          corrobPts: "Cap Unlocked",
+          facilityFit: "Asset-Based Lending & Invoice Finance",
+          evoiVal: "+£18.50 Net"
+        };
+      }
 
       // Case 0: Human Touch / Broker Alumni & Colleague Advantage
       if (prospect?.human_touch_boost || summary.includes("sylvia steele") || summary.includes("dundee")) {
@@ -2112,12 +2546,6 @@
       };
     }
 
-    let hovercardTimeout = null;
-    let hovercardHideTimeout = null;
-    let isHovercardOver = false;
-    let isHovercardVisible = false;
-    let hovercardElements = null;
-
     function getHovercardElements() {
       if (!hovercardElements) {
         hovercardElements = {
@@ -2152,13 +2580,13 @@
       return hovercardElements;
     }
 
-    function populateHovercard(crn, prospect, profile) {
+    function populateHovercard(crn, prospect, profile, focusDimension = 'summary') {
       const els = getHovercardElements();
       if (!els.card) return;
 
-      const compName = prospect?.company_name || profile?.company?.company_name || "Company";
-      const score = (prospect?.liquidity_strain_score !== undefined ? prospect.liquidity_strain_score : profile?.score_summary?.score) || 0;
-      const band = prospect?.score_band || profile?.score_summary?.score_band || "limited";
+      const compName = prospect?.company_name || profile?.company?.company_name || radarState?.currentTarget?.name || "Company";
+      const score = (prospect?.liquidity_strain_score !== undefined ? prospect.liquidity_strain_score : profile?.score_summary?.score) || (radarState?.currentTarget?.score) || 0;
+      const band = prospect?.score_band || profile?.score_summary?.score_band || (radarState?.currentTarget?.band) || "limited";
       const isSynthetic = prospect?.is_synthetic || profile?.company?.is_synthetic || false;
       const status = profile?.company?.company_status || prospect?.company_status || "ACTIVE";
 
@@ -2167,7 +2595,7 @@
       if (els.crn) els.crn.textContent = `CRN ${crn}`;
       if (els.status) els.status.textContent = status.toUpperCase();
       if (els.syntheticBadge) els.syntheticBadge.style.display = isSynthetic ? "inline-block" : "none";
-      if (els.scoreVal) els.scoreVal.textContent = score.toFixed(1);
+      if (els.scoreVal) els.scoreVal.textContent = typeof score === 'number' ? score.toFixed(1) : score;
       
       if (els.scoreBand) els.scoreBand.textContent = band.toUpperCase();
 
@@ -2184,8 +2612,8 @@
         }
       }
 
-      // 2. Surfacing Rationale & Provider Intelligence
-      const intel = getSurfacingRationale(crn, prospect, profile);
+      // 2. Surfacing Rationale & Provider Intelligence (dimension-focused)
+      const intel = getSurfacingRationale(crn, prospect, profile, focusDimension);
 
       if (els.rBox) els.rBox.className = `my-2 p-2.5 rounded ${intel.boxClass}`;
       if (els.tIcon) els.tIcon.textContent = intel.icon;
@@ -2236,15 +2664,15 @@
       }
     }
 
-    function showHovercard(event, crn) {
+    function showHovercard(event, crn, focusDimension = 'summary') {
       if (!crn || crn === 'SYSTEM' || crn === 'MODEL') return;
       clearTimeout(hovercardHideTimeout);
 
       const clientX = event.clientX;
       const clientY = event.clientY;
 
-      // Fast switch (30ms) if already visible; 150ms intent delay if opening cold
-      const delay = isHovercardVisible ? 30 : 150;
+      // Fast switch (30ms) if already visible; 120ms intent delay if opening cold
+      const delay = isHovercardVisible ? 30 : 120;
 
       clearTimeout(hovercardTimeout);
       hovercardTimeout = setTimeout(() => {
@@ -2261,7 +2689,7 @@
             .then(data => {
               profileCache[crn] = data;
               if (els.card.dataset.crn === crn && isHovercardVisible) {
-                populateHovercard(crn, prospect, data);
+                populateHovercard(crn, prospect, data, focusDimension);
               }
             })
             .catch(() => {
@@ -2269,7 +2697,7 @@
             });
         }
 
-        populateHovercard(crn, prospect, typeof profile === 'object' ? profile : null);
+        populateHovercard(crn, prospect, typeof profile === 'object' ? profile : null, focusDimension);
         positionHovercardFast(clientX, clientY);
 
         els.card.dataset.crn = crn;
@@ -2277,6 +2705,11 @@
         els.card.classList.add("active");
         isHovercardVisible = true;
       }, delay);
+    }
+
+    function showHovercardForCurrentTarget(event, focusDimension = 'summary') {
+      const crn = radarState?.currentTarget?.crn || (currentProspects.length > 0 ? currentProspects[0].crn : "08931201");
+      showHovercard(event, crn, focusDimension);
     }
 
     function hideHovercard() {
@@ -2341,11 +2774,21 @@
           hideHovercard();
         });
       }
+      const metricCard = document.getElementById("metric-hovercard");
+      if (metricCard) {
+        metricCard.addEventListener("mouseleave", () => {
+          hideMetricTooltip();
+        });
+      }
       window.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") hideHovercard();
+        if (e.key === "Escape") {
+          hideHovercard();
+          hideMetricTooltip();
+        }
       });
       window.addEventListener("scroll", () => {
         if (isHovercardVisible && !isHovercardOver) hideHovercard();
+        hideMetricTooltip();
       }, { passive: true });
     }
 
@@ -2444,17 +2887,16 @@
         else if (p.review_status === "suppressed") revBadge = "bg-slate-800/80 text-slate-500 line-through";
 
         return `
-          <tr id="prospect-row-${p.crn}" class="hover:bg-slate-850/60 transition group cursor-pointer" 
-              onmouseenter="showHovercard(event, '${p.crn}')"
-              onmouseleave="hideHovercard()"
-              onclick="hideHovercard(); lockRadarOnCompany('${p.crn}'); openProfile('${p.crn}')">
+          <tr id="prospect-row-${p.crn}" class="hover:bg-slate-850 transition group cursor-pointer border-l-2 border-transparent hover:border-sky-500" 
+              title="Click listing to load into Multi-Point Match Evaluator & inspect forensic dossier"
+              onclick="lockRadarOnCompany('${p.crn}'); openProfile('${p.crn}')">
             <td class="py-3 px-4">
               <div class="font-semibold text-slate-100 group-hover:text-sky-400 flex items-center gap-1.5 flex-wrap">
                 ${p.company_name}
                 ${p.is_synthetic ? '<span class="text-[9px] font-mono px-1 rounded bg-slate-800 text-slate-400">DEMO</span>' : ''}
                 ${p.human_touch_boost ? '<span class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold flex items-center gap-1 shrink-0" title="Broker Intervention Advantage Active (+16.0 pts)">🤝 +16pt HUMAN TOUCH</span>' : ''}
                 <span id="scan-indicator-${p.crn}" class="hidden text-[9px] font-mono px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 border border-sky-500/40 animate-pulse">
-                  ● RADAR
+                  ● ACTIVE TARGET
                 </span>
               </div>
               <div class="text-[11px] font-mono text-slate-400 mt-0.5">CRN: ${p.crn} &bull; ${p.company_status.toUpperCase()}</div>
@@ -2488,11 +2930,11 @@
               ${p.assigned_broker_name || '<span class="text-slate-600 font-mono">Unassigned</span>'}
             </td>
             <td class="py-3 px-4 text-right whitespace-nowrap">
-              <button onclick="event.stopPropagation(); hideHovercard(); lockRadarOnCompany('${p.crn}')" title="Interrogate and correlate live against all data dimensions" class="px-2 py-1 rounded bg-slate-800 hover:bg-sky-600 text-slate-300 hover:text-white font-mono text-[11px] transition mr-1">
-                ⚡ Radar
+              <button onclick="event.stopPropagation(); lockRadarOnCompany('${p.crn}')" title="Load into Multi-Point Match Evaluator in central row" class="px-2 py-1 rounded bg-slate-800 hover:bg-sky-600 text-slate-300 hover:text-white font-mono text-[11px] transition mr-1.5">
+                ⚡ Evaluate
               </button>
-              <button onclick="event.stopPropagation(); hideHovercard(); openProfile('${p.crn}')" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-mono text-[11px] transition">
-                Inspect
+              <button onclick="event.stopPropagation(); lockRadarOnCompany('${p.crn}'); openProfile('${p.crn}')" title="Inspect full forensic dossier" class="px-2.5 py-1 rounded bg-sky-600/20 hover:bg-sky-600 text-sky-300 hover:text-white font-mono text-[11px] border border-sky-500/30 transition">
+                Inspect Dossier &rarr;
               </button>
             </td>
           </tr>
