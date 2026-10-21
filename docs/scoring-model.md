@@ -136,13 +136,21 @@ $$S_{\text{final}} = \max(0.0, \, (S_{\text{raw}} \cdot M_{\text{corrob}}) - 15.
 
 ---
 
-## 9. Adaptive Opportunity Assessment & Machine Learning Shadow Mode
+## 9. Adaptive Opportunity Assessment & Dual-Layer Machine Learning Architecture
 
-In addition to the baseline Liquidity Strain Score v1.0.0, the platform incorporates the **Adaptive Finance Opportunity Engine**:
+The platform operates a **dual-layer scoring architecture**:
+1. **Deterministic Rules Engine (`scoring_engine.py`, `opportunity_assessment.py`)**: The authoritative, fully explainable baseline and production fallback.
+2. **Supervised Machine Learning Layer (`backend/app/ml/`)**: Runs in shadow mode to evaluate whether statistical learning can improve top-of-funnel broker precision without sacrificing calibration or stability.
 
-- **Opportunity Probability $P(\text{Opportunity})$**: Calibrated logistic model assessing the commercial likelihood that the entity requires working capital facility arrangement.
-- **Conversion Probability $P(\text{Funded})$**: Hygiene-adjusted probability of successfully funding a commercial facility.
-- **Product Fit Matrix**: Granular suitability scores for Invoice Discounting, Asset Refinance, and Unsecured Term Loans.
-- **Supervised ML Model (`v1.1.0-ml-shadow`)**: Runs concurrently in shadow mode using `HistGradientBoostingClassifier` with isotonic calibration (`CalibratedClassifierCV`) on time-aware training sets with zero target leakage.
-- **Economic Value of Information (EVOI)**: Dynamically determines whether external credit bureau investigations (£0.10 - £3.00) are justified by expected broker commission gains.
+### Dual-Layer Operational Guarantees
+- **Explainability**: If the ML layer is promoted, the rules-based score and contribution breakdown remain accessible on every company profile for human underwriting and broker explanation.
+- **Fail-Safe Fallback**: If ML prediction libraries or models are unavailable or uncalibrated, the platform seamlessly defaults to the deterministic rules engine without service interruption.
+- **Canonical Feature Alignment**: Both training and inference consume the exact same `FEATURE_SPEC` ([`backend/app/ml/features.py`](file:///Users/trinity/Documents/antigravity/eager-planck/backend/app/ml/features.py)) with explicit missingness flags, preventing training/serving skew.
+- **Bi-Temporal Point-in-Time Isolation**: Features are strictly computed as of the snapshot cutoff date. Right-censored companies are excluded from training datasets.
+- **Statutory Proxy vs Broker Conversion**:
+  - `new_charge_12m`: Measures broader SME commercial finance DEMAND from Companies House statutory charge filings.
+  - `broker_funded`: Measures actual broker funnel conversion.
+- **Head-to-Head Walk-Forward Validation**: Candidate ML models (Regularized Logistic Regression, Monotonic HistGradientBoosting, Calibrated HistGradientBoosting) are evaluated against the rules baseline on identical out-of-sample temporal slices with disjoint company partitioning.
+- **Statistical Promotion Gate**: Candidate models can only be promoted to active scoring via the manual Admin workflow if cluster bootstrap confidence intervals demonstrate statistically significant improvements in Top-10 Precision and Brier score over the deterministic rules baseline.
+- **Shadow Prediction Persistence**: Every generated assessment persists shadow ML scores in the `model_predictions` table for continuous retrospective auditing.
 

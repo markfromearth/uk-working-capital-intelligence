@@ -56,7 +56,7 @@ API documentation is available at **`http://localhost:8000/docs`**.
 
 ## 3. Running Automated Tests
 
-The platform includes 31 comprehensive tests spanning unit, integration, entity resolution, point-in-time correctness, and controlled failure-detection tests:
+The platform includes **92 comprehensive automated tests** spanning unit, integration, entity resolution, point-in-time correctness, machine learning lifecycle, and controlled failure-detection tests:
 
 ```bash
 source .venv/bin/activate
@@ -73,10 +73,45 @@ PYTHONPATH=. pytest -v tests/
 7. `tests/test_llm_explainer.py`: Strict schema validation and rejection of hallucinated signal IDs.
 8. `tests/test_api_and_review_workflow.py`: End-to-end API verification, dashboard metrics, profile retrieval, and broker review logging.
 9. `tests/test_controlled_failures.py`: Demonstrates that critical tests actively detect invalid conditions.
+10. `tests/test_audit_trail_tamper_evidence.py`: Cryptographic hash chain verification and tampering detection.
+11. `tests/test_adaptive_investigation_and_ml.py`: EVOI evaluation, tool registry, budget caps, and commercial opportunity assessments.
+12. `tests/test_decision_maker_and_audience_activation.py`: Decision-maker discovery, multi-signal identity resolution, and audience activation.
+13. `tests/test_ml_dataset_and_leakage.py`: Canonical feature extraction, point-in-time snapshot dataset construction, strict right-censoring, and target leakage prevention.
+14. `tests/test_ml_proxy_pipeline.py`: Statutory proxy-label backfill (`new_charge_12m`), rate pacing, and distinction from broker conversion.
+15. `tests/test_ml_training_and_evaluation.py`: Walk-forward validation, disjoint company clustering, candidate model training, rules baseline head-to-head metrics, refusal guards, and model card serialization.
+16. `tests/test_ml_shadow_logging_and_promotion.py`: Shadow prediction persistence in `model_predictions`, cluster bootstrap confidence interval evaluation, `/ml/status`, and manual admin promotion workflow.
+17. `tests/test_ml_evoi_learning.py`: Canonical missingness pattern extraction, prior fallbacks, Bayesian-smoothed empirical EVOI learning, and investigation run outcome logging.
 
 ---
 
-## 4. Configuration & Environment Variables
+## 4. Machine Learning Production Promotion Layer
+
+The platform incorporates a production-promotable, honest machine learning layer operating alongside the deterministic rules engine:
+
+- **Single Feature Specification (`backend/app/ml/features.py`)**: 15 canonical features (10 continuous, 5 explicit missingness indicators) with monotonic tree constraints and SHA-256 version hash.
+- **Point-in-Time Dataset Construction (`backend/app/ml/dataset.py`)**: Strictly 1 row per `(crn, snapshot_date)`, future-leakage prevention via bi-temporal query bounds, and right-censoring exclusion.
+- **Dual Label Semantics**:
+  - `new_charge_12m`: Statutory proxy measuring broader UK SME **commercial finance DEMAND** from Companies House filings.
+  - `broker_funded`: Verified **broker sales funnel conversion**.
+- **Candidate Models & Honest Evaluation (`backend/app/ml/train.py`)**:
+  - Regularized Logistic Regression (median imputer + standard scaler + L2 penalty).
+  - Monotonic HistGradientBoosting.
+  - Calibrated HistGradientBoosting (calibrated on a held-out temporal validation slice via `FrozenEstimator`).
+  - Expanding-window temporal walk-forward splits combined with disjoint company GroupKFold (no company appears in both train and test splits).
+  - Out-of-sample metrics (ROC-AUC, PR-AUC, Brier score, Top-K Precision / Lift for $k=10, 25, 50$) evaluated head-to-head against the rules baseline on identical out-of-sample test rows.
+  - Training refusal guard requiring $\ge 200$ companies and $\ge 30$ positives to prevent fitting toy models on unrepresentative data.
+- **Shadow Mode & Statistical Promotion Gate (`backend/app/ml/promotion.py`)**:
+  - Predictions logged per assessment in `model_predictions` table.
+  - Cluster bootstrap confidence intervals (resampled by company, 1,000 iterations). Candidate models are eligible for promotion only if 95% bootstrap CI shows statistically significant improvement in Top-10 Precision and Brier score over the rules engine.
+  - Manual Admin promotion endpoint (`POST /api/v1/adaptive/ml/promote`) with immutable audit logging.
+- **Empirical EVOI Learning (`backend/app/ml/evoi_learning.py`)**:
+  - `investigation_run_logs` tracks empirical prior/posterior actions and tiers upon tool execution.
+  - Empirical $P(\text{action change} \mid \text{tool}, \text{missingness pattern})$ estimated using Bayesian smoothing ($N_0 = 10$).
+  - Safe fallback to heuristic domain priors when sample count $< 20$.
+
+---
+
+## 5. Configuration & Environment Variables
 
 Copy `.env.example` to `.env` to configure optional live provider credentials:
 
