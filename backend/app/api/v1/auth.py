@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from backend.app.database import get_db
 from backend.app.models.user import User, AuditLog
 from backend.app.schemas.auth import Token, UserLogin, UserCreate, UserOut
-from backend.app.core.security import hash_password, verify_password, create_access_token, decode_access_token
+from backend.app.core.security import hash_password, verify_password, create_access_token, decode_access_token, password_needs_rehash
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
@@ -44,6 +44,8 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    if password_needs_rehash(user.hashed_password):
+        user.hashed_password = hash_password(form_data.password)
     user.last_login_at = datetime.now(timezone.utc)
     db.commit()
     token = create_access_token(subject=user.id, role=user.role)
@@ -60,6 +62,8 @@ def json_login(login_req: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == login_req.email).first()
     if not user or not verify_password(login_req.password, user.hashed_password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
+    if password_needs_rehash(user.hashed_password):
+        user.hashed_password = hash_password(login_req.password)
     user.last_login_at = datetime.now(timezone.utc)
     db.commit()
     token = create_access_token(subject=user.id, role=user.role)

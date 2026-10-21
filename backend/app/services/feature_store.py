@@ -36,7 +36,7 @@ class FeatureStoreService:
             NormalizedSignal.crn == crn,
             NormalizedSignal.observation_timestamp <= as_of_timestamp,
             (NormalizedSignal.ingestion_timestamp <= as_of_timestamp) | (NormalizedSignal.ingestion_timestamp.is_(None)),
-            NormalizedSignal.verification_status.notin_(["disputed", "superseded"])
+            NormalizedSignal.verification_status.notin_(["disputed", "superseded", "withdrawn"])
         ).order_by(NormalizedSignal.observation_timestamp.desc()).all()
 
         # Window thresholds
@@ -85,8 +85,22 @@ class FeatureStoreService:
             if obs.tzinfo is None:
                 obs = obs.replace(tzinfo=timezone.utc)
 
-            # Deduplication: logically duplicated signals from one underlying event
-            event_key = (sig.signal_type, sig.original_event_ref or sig.signal_id)
+            # Canonical underlying event extraction across multiple providers:
+            # If two providers report the same court judgment (CCJ), statutory charge,
+            # or Gazette notice (matching evidence_reference or underlying_event_ref in metadata),
+            # they derive from the same underlying primary event and must not be double counted
+            # or falsely credited as two independent corroboration sources.
+            underlying_event_ref = sig.evidence_reference
+            if not underlying_event_ref and sig.metadata_json:
+                try:
+                    meta = json.loads(sig.metadata_json)
+                    underlying_event_ref = meta.get("underlying_event_ref") or meta.get("canonical_event_id") or meta.get("court_case_number")
+                except Exception:
+                    pass
+            if not underlying_event_ref:
+                underlying_event_ref = sig.original_event_ref or sig.signal_id
+
+            event_key = (sig.signal_type, underlying_event_ref)
             if event_key in seen_event_keys:
                 continue
             seen_event_keys.add(event_key)

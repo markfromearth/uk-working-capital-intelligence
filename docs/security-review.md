@@ -61,16 +61,23 @@ The platform implements defence-in-depth across the ingestion, data persistence,
 - **Backwards Compatibility**: The verifier recognizes legacy hashes and validates them seamlessly while issuing re-hash flags upon next login.
 - **Verification**: Verified by automated test [`test_pbkdf2_210k_iteration_hashing_and_legacy_compatibility`](file:///Users/trinity/Documents/antigravity/eager-planck/tests/test_audit_and_security.py).
 
-### B. Tamper-Evident Audit Log Hash Chaining
-- **Model**: [`AuditLog`](file:///Users/trinity/Documents/antigravity/eager-planck/backend/app/models/user.py)
+### B. Tamper-Evident Audit Log Hash Chaining & Signed Checkpoints
+- **Model**: [`AuditLog`](file:///Users/trinity/Documents/antigravity/eager-planck/backend/app/models/user.py) and [`AuditCheckpoint`](file:///Users/trinity/Documents/antigravity/eager-planck/backend/app/models/user.py)
 - **Service**: [`backend/app/services/audit.py`](file:///Users/trinity/Documents/antigravity/eager-planck/backend/app/services/audit.py)
-- Every audit entry (user login, prospect status transition, manual note creation) computes a cryptographic hash:
-  $$\text{record\_hash} = \text{SHA-256}(\text{prev\_hash} \,\|\, \text{action} \,\|\, \text{user\_id} \,\|\, \text{timestamp} \,\|\, \text{resource\_type} \,\|\, \text{details})$$
-- The genesis entry uses `GENESIS_HASH = "0" * 64`.
-- **Integrity Verification**:
-  - `GET /api/v1/system/audit-verification` verifies the unbroken chain from genesis to the latest record.
-  - If any row is modified, deleted, or inserted out-of-band directly in the database, the chain breaks and the verification fails.
-  - Verified by automated tests [`test_tamper_evident_audit_log_hash_chain`](file:///Users/trinity/Documents/antigravity/eager-planck/tests/test_audit_and_security.py) and [`test_audit_log_tamper_detection`](file:///Users/trinity/Documents/antigravity/eager-planck/tests/test_audit_and_security.py).
+- Every audit entry (user login, prospect status transition, manual note creation) computes a cryptographic hash binding all 10 canonical fields:
+  $$\text{record\_hash} = \text{SHA-256}(\text{prev\_hash} \,\|\, \text{user\_id} \,\|\, \text{user\_email} \,\|\, \text{user\_role} \,\|\, \text{action} \,\|\, \text{resource\_type} \,\|\, \text{resource\_id} \,\|\, \text{details} \,\|\, \text{ip\_address} \,\|\, \text{timestamp})$$
+- The genesis entry uses `GENESIS_HASH = "GENESIS_BLOCK_HASH_UK_WORKING_CAPITAL_2026"`.
+- **Independently Signed Checkpoints**:
+  - Periodically and upon commits, an `AuditCheckpoint` record is stored with:
+    $$\text{signature} = \text{HMAC-SHA256}(\text{SECRET\_KEY}, \, \text{sequence} \,\|\, \text{last\_audit\_id} \,\|\, \text{last\_record\_hash} \,\|\, \text{total\_records})$$
+  - If an attacker truncates the tail records, the total record count and terminal hash will not match the signed checkpoint.
+  - If an attacker with direct SQL access attempts to recalculate all hashes, their forged chain fails HMAC checkpoint verification because they lack the host's `SECRET_KEY`.
+- **Integrity Verification & RBAC**:
+  - `GET /api/v1/system/audit-verification` verifies both the sequential chain and the HMAC checkpoint signature.
+  - Restricted strictly to `ADMIN` and `ANALYST` roles.
+- **Threat Model & Trust Assumptions**:
+  - **Not Physically Immutable**: The log is tamper-evident. If an adversary compromises both the database storage volume and the application host's `SECRET_KEY`, they could forge new checkpoints.
+  - For full enterprise non-repudiation, checkpoint digests should be mirrored out-of-band to WORM object storage (e.g. AWS S3 Object Lock or Azure Immutable Blob).
 
 ### C. Webhook Ingestion Authentication & Anti-Replay
 - **Module**: [`backend/app/providers/creditsafe.py`](file:///Users/trinity/Documents/antigravity/eager-planck/backend/app/providers/creditsafe.py)

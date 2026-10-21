@@ -55,7 +55,10 @@ class CreditsafeAdapter(IProviderAdapter):
 
         if self._is_live:
             return self._fetch_live_report(norm_crn)
-        return self._generate_simulated_signals(norm_crn)
+        if settings.DEMO_MODE:
+            return self._generate_simulated_signals(norm_crn)
+        logger.warning(f"Creditsafe API credentials unconfigured and DEMO_MODE=False. Cannot fetch signals for {norm_crn}.")
+        return []
 
     def verify_webhook(
         self,

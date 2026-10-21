@@ -51,7 +51,10 @@ class ExperianAdapter(IProviderAdapter):
 
         if self._is_live:
             return self._fetch_live_delinquency(norm_crn)
-        return self._generate_simulated_signals(norm_crn)
+        if settings.DEMO_MODE:
+            return self._generate_simulated_signals(norm_crn)
+        logger.warning(f"Experian API credentials unconfigured and DEMO_MODE=False. Cannot fetch signals for {norm_crn}.")
+        return []
 
     def _fetch_live_delinquency(self, crn: str) -> List[Dict[str, Any]]:
         url = f"{EXPERIAN_BASE_URL}/commercial/companies/{crn}/risk-scores"

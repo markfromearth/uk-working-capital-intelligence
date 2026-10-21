@@ -58,6 +58,23 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     except Exception:
         return False
 
+def password_needs_rehash(hashed_password: str) -> bool:
+    """
+    Returns True if the hashed password uses a legacy format or has fewer
+    than the recommended 210,000 PBKDF2 iterations.
+    """
+    if not hashed_password:
+        return True
+    if not hashed_password.startswith("pbkdf2_sha256$"):
+        return True
+    try:
+        parts = hashed_password.split("$")
+        if len(parts) == 4 and int(parts[1]) < PBKDF2_ITERATIONS:
+            return True
+        return False
+    except Exception:
+        return True
+
 def create_access_token(subject: Union[str, Any], role: str, expires_delta: Optional[timedelta] = None) -> str:
     """Creates a signed JWT access token with role claims."""
     if expires_delta:

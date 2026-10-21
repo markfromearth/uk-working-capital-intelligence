@@ -9,6 +9,8 @@ from backend.app.database import get_db
 from backend.app.core.logging import logger
 from backend.app.core.crn_normalizer import normalize_uk_crn
 from backend.app.models.signal import RawEvent, NormalizedSignal, DeadLetterEvent
+from backend.app.models.user import User
+from backend.app.api.v1.auth import require_role
 from backend.app.services.ingestion import IngestionService
 from backend.app.providers.registry import provider_registry
 
@@ -131,10 +133,12 @@ def trigger_companies_house_stream_sync(
 @router.post("/dead-letter-queue/{dlq_id}/replay")
 def replay_dead_letter_queue_event(
     dlq_id: int,
+    current_user: User = Depends(require_role(["ADMIN", "admin"])),
     db: Session = Depends(get_db)
 ):
     """
     Attempts to replay and reprocess a quarantined Dead Letter Queue event.
+    Restricted to Admin role.
     """
     ingestion_service = IngestionService(db)
     success, message = ingestion_service.replay_dead_letter_event(dlq_id)
@@ -143,8 +147,12 @@ def replay_dead_letter_queue_event(
     return {"status": "replayed", "message": message, "dead_letter_id": dlq_id}
 
 @router.get("/dead-letter-queue")
-def list_dead_letter_events(limit: int = 50, db: Session = Depends(get_db)):
-    """Inspect unparseable or rejected event payloads."""
+def list_dead_letter_events(
+    limit: int = 50,
+    current_user: User = Depends(require_role(["ADMIN", "admin", "ANALYST", "analyst"])),
+    db: Session = Depends(get_db)
+):
+    """Inspect unparseable or rejected event payloads. Restricted to Admin and Analyst roles."""
     dles = db.query(DeadLetterEvent).order_by(DeadLetterEvent.created_at.desc()).limit(limit).all()
     return [
         {

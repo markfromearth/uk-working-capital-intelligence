@@ -38,3 +38,16 @@ class AuditLog(Base):
     prev_hash = Column(String(64), nullable=True)            # SHA-256 of preceding audit record
     record_hash = Column(String(64), nullable=True)          # SHA-256 of current record contents + prev_hash
     created_at = Column(DateTime, default=utcnow, index=True)
+
+class AuditCheckpoint(Base):
+    """Independently signed cryptographic checkpoints protecting against audit log truncation and unauthorized re-hashing."""
+    __tablename__ = "audit_checkpoints"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    checkpoint_sequence = Column(Integer, nullable=False, unique=True, index=True)
+    last_audit_id = Column(Integer, nullable=False)
+    last_record_hash = Column(String(64), nullable=False)
+    total_records = Column(Integer, nullable=False)
+    signature = Column(String(64), nullable=False)  # HMAC-SHA256(SECRET_KEY, f"{seq}:{last_audit_id}:{last_record_hash}:{total_records}")
+    created_at = Column(DateTime, default=utcnow)
+

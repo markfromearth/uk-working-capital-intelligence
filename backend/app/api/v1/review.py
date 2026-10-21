@@ -1,6 +1,7 @@
 import json
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
@@ -9,7 +10,8 @@ from backend.app.core.crn_normalizer import normalize_uk_crn
 from backend.app.models.review import BrokerReviewAction
 from backend.app.models.company import CompanyRegistry, CompanyMatchReview
 from backend.app.models.signal import NormalizedSignal
-from backend.app.models.user import AuditLog
+from backend.app.models.user import User, AuditLog
+from backend.app.api.v1.auth import require_role
 from backend.app.schemas.review import ReviewActionCreate, ReviewActionOut
 from backend.app.schemas.company import CompanyMatchReviewOut, MatchReviewDecision
 
@@ -116,3 +118,42 @@ def decide_entity_match(
         details={"source_identifier": review.source_identifier, "candidate_crn": review.candidate_crn}
     )
     return review
+
+class UnmergeRequest(BaseModel):
+    source_identifier: str
+    current_crn: str
+    target_crn: Optional[str] = None
+    reason: str
+
+@router.post("/unmerge")
+def unmerge_entity_matches(
+    req: UnmergeRequest,
+    current_user: User = Depends(require_role(["ADMIN", "admin", "ANALYST", "analyst"])),
+    db: Session = Depends(get_db)
+):
+    """
+    Splits or unmerges an incorrect entity resolution match.
+    Restricted to Admin and Analyst roles.
+    """
+    from backend.app.services.resolution import EntityResolutionService
+    service = EntityResolutionService(db)
+    success, msg = service.unmerge_or_split_entity(
+        source_identifier=req.source_identifier,
+        current_crn=req.current_crn,
+        target_crn=req.target_crn,
+        reason=req.reason
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail=msg)
+
+    log_audit_event(
+        db=db,
+        action="entity_unmerge_split",
+        resource_type="entity_resolution",
+        resource_id=req.source_identifier,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        user_role=current_user.role,
+        details={"current_crn": req.current_crn, "target_crn": req.target_crn, "reason": req.reason}
+    )
+    return {"status": "success", "message": msg}

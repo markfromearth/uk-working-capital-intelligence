@@ -28,3 +28,19 @@ def init_db():
     # Import all models to ensure they are registered with Base metadata
     from backend.app.models import company, signal, feature, score, user, review  # noqa
     Base.metadata.create_all(bind=engine)
+
+    # SQLite migration helper for new columns
+    if settings.DATABASE_URL.startswith("sqlite"):
+        with engine.connect() as conn:
+            cursor = conn.exec_driver_sql("PRAGMA table_info(stream_checkpoints)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if columns:
+                if "has_gap" not in columns:
+                    conn.exec_driver_sql("ALTER TABLE stream_checkpoints ADD COLUMN has_gap BOOLEAN DEFAULT 0")
+                if "gap_from_timepoint" not in columns:
+                    conn.exec_driver_sql("ALTER TABLE stream_checkpoints ADD COLUMN gap_from_timepoint VARCHAR(255)")
+                if "gap_to_timepoint" not in columns:
+                    conn.exec_driver_sql("ALTER TABLE stream_checkpoints ADD COLUMN gap_to_timepoint VARCHAR(255)")
+                if "gap_detected_at" not in columns:
+                    conn.exec_driver_sql("ALTER TABLE stream_checkpoints ADD COLUMN gap_detected_at DATETIME")
+            conn.commit()

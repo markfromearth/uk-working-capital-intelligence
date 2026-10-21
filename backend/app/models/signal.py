@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, DateTime, Text, Float, Integer, ForeignKey, Index
+from sqlalchemy import Column, String, DateTime, Text, Float, Integer, ForeignKey, Index, Boolean
 from sqlalchemy.orm import relationship
 from backend.app.database import Base
 
@@ -63,7 +63,11 @@ class StreamCheckpoint(Base):
     last_timepoint = Column(String(255), nullable=True)
     last_processed_at = Column(DateTime, default=utcnow)
     events_processed_count = Column(Integer, default=0)
-    status = Column(String(50), default="active")  # active, paused, error
+    status = Column(String(50), default="active")  # active, paused, degraded_gap, error
+    has_gap = Column(Boolean, default=False)
+    gap_from_timepoint = Column(String(255), nullable=True)
+    gap_to_timepoint = Column(String(255), nullable=True)
+    gap_detected_at = Column(DateTime, nullable=True)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 class DeadLetterEvent(Base):

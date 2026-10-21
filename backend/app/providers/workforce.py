@@ -60,7 +60,10 @@ class WorkforceAdapter(IProviderAdapter):
         """Returns ordered dated headcount observations (oldest to newest)."""
         if self._is_live:
             return self._fetch_live_headcount_history(crn)
-        return self._generate_simulated_headcount_history(crn)
+        if settings.DEMO_MODE:
+            return self._generate_simulated_headcount_history(crn)
+        logger.warning(f"Workforce credentials unconfigured and DEMO_MODE=False. Cannot fetch headcount for {crn}.")
+        return []
 
     def _fetch_live_headcount_history(self, crn: str) -> List[Dict[str, Any]]:
         # In a real environment, query Proxycurl company profile endpoint or historical endpoint

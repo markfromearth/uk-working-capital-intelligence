@@ -56,7 +56,10 @@ class CompaniesHouseAdapter(IProviderAdapter, IStreamingAdapter):
 
         if self._is_live:
             return self._fetch_live_profile(norm_crn)
-        return self._generate_simulated_profile(norm_crn)
+        if settings.DEMO_MODE:
+            return self._generate_simulated_profile(norm_crn)
+        logger.warning(f"Companies House API credentials unconfigured and DEMO_MODE=False. Cannot fetch profile for {norm_crn}.")
+        return None
 
     def fetch_company_charges(self, raw_crn: str) -> List[Dict[str, Any]]:
         """Fetch charges (MR01 registrations, MR04 satisfactions) for a company."""
@@ -66,7 +69,10 @@ class CompaniesHouseAdapter(IProviderAdapter, IStreamingAdapter):
 
         if self._is_live:
             return self._fetch_live_charges(norm_crn)
-        return self._generate_simulated_charges(norm_crn)
+        if settings.DEMO_MODE:
+            return self._generate_simulated_charges(norm_crn)
+        logger.warning(f"Companies House API credentials unconfigured and DEMO_MODE=False. Cannot fetch charges for {norm_crn}.")
+        return []
 
     def fetch_company_signals(self, crn: str) -> List[Dict[str, Any]]:
         """Normalises charge filings into structured signal payloads."""
@@ -84,7 +90,10 @@ class CompaniesHouseAdapter(IProviderAdapter, IStreamingAdapter):
         """
         if self._is_live:
             return self._poll_live_stream(timepoint, limit)
-        return self._poll_simulated_stream(timepoint, limit)
+        if settings.DEMO_MODE:
+            return self._poll_simulated_stream(timepoint, limit)
+        logger.warning("Companies House streaming credentials unconfigured and DEMO_MODE=False.")
+        return {"events": [], "next_timepoint": timepoint, "has_more": False, "error": "unconfigured"}
 
     def _fetch_live_profile(self, crn: str) -> Optional[Dict[str, Any]]:
         url = f"{COMPANIES_HOUSE_API_URL}/company/{crn}"
@@ -129,8 +138,8 @@ class CompaniesHouseAdapter(IProviderAdapter, IStreamingAdapter):
             # Note: Streaming endpoint in live mode provides newline-delimited JSON
             with httpx.stream("GET", url, auth=(self.api_key, ""), params=params, timeout=30.0) as stream:
                 if stream.status_code == 416:
-                    logger.warning(f"Companies House streaming cursor {timepoint} expired (HTTP 416). Resetting cursor to stream head.")
-                    return {"events": [], "next_timepoint": None, "has_more": False, "error": "cursor_expired_reset"}
+                    logger.warning(f"Companies House streaming cursor {timepoint} expired (HTTP 416). Resetting to stream head with degraded gap status.")
+                    return {"events": [], "next_timepoint": None, "has_more": False, "error": "cursor_expired_reset", "gap_detected": True, "gap_from": timepoint}
 
                 events = []
                 last_tp = timepoint
@@ -144,8 +153,8 @@ class CompaniesHouseAdapter(IProviderAdapter, IStreamingAdapter):
                 return {"events": events, "next_timepoint": last_tp, "has_more": len(events) >= limit}
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 416:
-                logger.warning(f"Companies House stream cursor {timepoint} out of range (HTTP 416). Resetting.")
-                return {"events": [], "next_timepoint": None, "has_more": False, "error": "cursor_expired_reset"}
+                logger.warning(f"Companies House stream cursor {timepoint} out of range (HTTP 416). Resetting with degraded gap.")
+                return {"events": [], "next_timepoint": None, "has_more": False, "error": "cursor_expired_reset", "gap_detected": True, "gap_from": timepoint}
             logger.error(f"Companies House streaming HTTP error: {e}")
             return {"events": [], "next_timepoint": timepoint, "has_more": False, "error": str(e)}
         except Exception as e:

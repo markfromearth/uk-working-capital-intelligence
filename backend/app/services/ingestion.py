@@ -219,7 +219,100 @@ class IngestionService:
             cp.last_timepoint = timepoint
             cp.last_processed_at = now
             cp.events_processed_count += processed_count
-            cp.status = "active"
+            if cp.status != "degraded_gap":
+                cp.status = "active"
         self.db.commit()
         self.db.refresh(cp)
         return cp
+
+    def record_stream_gap(
+        self,
+        stream_name: str,
+        from_timepoint: Optional[str],
+        to_timepoint: Optional[str]
+    ) -> StreamCheckpoint:
+        """
+        Explicitly records that an unrecoverable gap occurred in the stream
+        (e.g. cursor expired with HTTP 416, falling outside provider's stream buffer).
+        Sets status='degraded_gap' so monitoring and health checks truthfully report
+        the ingestion stream as degraded rather than silently claiming healthy ingestion.
+        """
+        cp = self.db.query(StreamCheckpoint).filter(StreamCheckpoint.stream_name == stream_name).first()
+        now = datetime.now(timezone.utc)
+        if not cp:
+            cp = StreamCheckpoint(
+                stream_name=stream_name,
+                last_timepoint=to_timepoint,
+                last_processed_at=now,
+                events_processed_count=0,
+                status="degraded_gap",
+                has_gap=True,
+                gap_from_timepoint=from_timepoint,
+                gap_to_timepoint=to_timepoint,
+                gap_detected_at=now
+            )
+            self.db.add(cp)
+        else:
+            cp.status = "degraded_gap"
+            cp.has_gap = True
+            cp.gap_from_timepoint = from_timepoint
+            cp.gap_to_timepoint = to_timepoint
+            cp.gap_detected_at = now
+            cp.last_timepoint = to_timepoint
+        self.db.commit()
+        self.db.refresh(cp)
+        logger.warning(
+            f"STREAM GAP RECORDED on '{stream_name}': from cursor {from_timepoint} to {to_timepoint}. "
+            "Status transitioned to 'degraded_gap'."
+        )
+        return cp
+
+    def process_stream_batch(
+        self,
+        stream_name: str,
+        events: List[Dict[str, Any]]
+    ) -> Tuple[int, Optional[str], Optional[str]]:
+        """
+        Durably processes a batch of stream events.
+        Guarantees that the stream checkpoint only advances to the timepoint
+        of the LAST SUCCESSFULLY PROCESSED event. If processing fails midway,
+        the checkpoint remains at the last good event and cannot advance beyond durably handled data.
+        Returns: (success_count, last_successful_timepoint, error_message_if_any)
+        """
+        success_count = 0
+        last_success_tp = None
+
+        for evt in events:
+            tp = str(evt.get("timepoint") or evt.get("event", {}).get("timepoint") or "")
+            try:
+                raw_evt, is_new = self.ingest_raw_event(
+                    source_provider=stream_name,
+                    payload=evt,
+                    provider_event_id=tp
+                )
+                fields = evt.get("event", {}).get("fields", {})
+                crn = fields.get("company_number")
+                if crn:
+                    sig_payload = {
+                        "crn": crn,
+                        "source_provider": stream_name,
+                        "signal_type": "charge_satisfaction_mr04" if fields.get("form_type") == "MR04" else "charge_filing",
+                        "original_event_ref": f"{stream_name}-{tp}",
+                        "observation_timestamp": evt.get("event", {}).get("published_at", datetime.now(timezone.utc).isoformat()),
+                        "value_text": fields.get("description", "Charge filing"),
+                        "direction": "strain_decreasing" if fields.get("status") == "fully-satisfied" else "neutral",
+                        "metadata_json": json.dumps({"scope": "full" if fields.get("status") == "fully-satisfied" else "partial", "timepoint": tp})
+                    }
+                    self.process_normalized_signal(raw_evt.id, sig_payload)
+
+                # Event was durably committed! Advance checkpoint up to this event
+                success_count += 1
+                last_success_tp = tp
+                self.update_checkpoint(stream_name, tp, processed_count=1)
+
+            except Exception as e:
+                logger.error(f"Failed processing stream event at timepoint {tp}: {e}")
+                return success_count, last_success_tp, str(e)
+
+        return success_count, last_success_tp, None
+
