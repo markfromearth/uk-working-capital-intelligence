@@ -14,6 +14,12 @@ from backend.app.ml.features import extract_features_dict
 
 COMMERCIAL_MODEL_VERSION = "v1.0.0-rules"
 
+# Recognition of Value Brought by the Human Touch:
+# Personal broker intervention, executive relationship dialogue, and bespoke deal structuring
+# have the documented potential to add 16 points to the opportunity / funded facility probability score.
+BROKER_INTERVENTION_BOOST_PTS: float = 16.0
+BROKER_INTERVENTION_PROBABILITY_UPLIFT: float = 0.160
+
 class CommercialOpportunityAssessor:
     """
     Assesses commercial funding opportunities, converting technical strain features

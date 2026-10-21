@@ -119,12 +119,24 @@
       transform: translateY(0) scale(1);
     }
 
+    /* Floating Broker Alert HUD */
+    .broker-alert-hud {
+      transition: opacity 0.28s cubic-bezier(0.16, 1, 0.3, 1), transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(245, 158, 11, 0.4);
+      backdrop-filter: blur(14px);
+    }
+    .broker-alert-hud.dismissing {
+      opacity: 0 !important;
+      transform: translateY(-16px) scale(0.96) !important;
+      pointer-events: none;
+    }
+
     /* Respect prefers-reduced-motion */
     @media (prefers-reduced-motion: reduce) {
       .radar-sweep, .soft-pulse, .ticker-track {
         animation: none !important;
       }
-      .intel-hovercard {
+      .intel-hovercard, .broker-alert-hud {
         transition: none !important;
         transform: none !important;
       }
@@ -408,6 +420,12 @@
                 </span>
               </div>
               <div class="flex items-center gap-2">
+                <span class="text-[10px] font-mono text-purple-300 px-2 py-0.5 rounded bg-purple-500/10 border border-purple-500/30 hidden sm:inline-flex items-center gap-1">
+                  🤝 Human Touch: +16 pts potential
+                </span>
+                <button onclick="triggerSimulatedAlert()" class="px-2 py-1 rounded bg-purple-600/30 hover:bg-purple-600/50 text-purple-200 border border-purple-500/40 font-mono text-xs flex items-center gap-1 transition" title="Trigger Workforce Mapping Colleague Alert">
+                  <span>🤝 Simulate Colleague Alert</span>
+                </button>
                 <button onclick="inspectRadarTarget()" class="px-2.5 py-1 rounded bg-sky-600 hover:bg-sky-500 text-white font-mono text-xs flex items-center gap-1 transition">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
                   Inspect Dossier
@@ -1000,6 +1018,23 @@
               <span id="meter-term-val" class="w-12 font-mono text-right font-semibold text-emerald-400">0%</span>
             </div>
           </div>
+
+          <!-- Recognition of Value Brought by the Human Touch -->
+          <div class="mt-3.5 p-3 rounded bg-purple-950/40 border border-purple-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <div class="flex items-center gap-1.5 text-purple-300 font-mono text-xs font-bold uppercase">
+                <span>🤝</span>
+                <span>Value of the Human Touch &bull; Broker Intervention</span>
+                <span id="modal-human-touch-badge" class="px-1.5 py-0.2 rounded text-[10px] font-mono bg-purple-500/20 text-purple-300 border border-purple-500/40">+16.0 Pts Potential</span>
+              </div>
+              <p class="text-slate-300 text-[11px] mt-1 leading-relaxed">
+                Broker intervention has potential to add <strong>16 points</strong> to probability score by bridging warm alumni/colleague relationships, director dialogue, and unencumbered asset discovery.
+              </p>
+            </div>
+            <button id="modal-human-boost-btn" onclick="toggleCurrentProspectHumanBoost()" class="shrink-0 px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-500 text-white font-mono text-xs font-semibold flex items-center gap-1.5 transition shadow">
+              <span>🤝 Apply +16pt Boost</span>
+            </button>
+          </div>
         </div>
 
         <!-- Value-of-Information (EVOI) Investigation Engine -->
@@ -1242,6 +1277,157 @@
     </div>
   </div>
 
+  <!-- Floating Broker Network Intelligence Alert (Occasional Dynamic Surveillance Toast) -->
+  <div id="broker-alert-hud" class="broker-alert-hud fixed top-16 right-6 z-50 w-[500px] max-w-[calc(100vw-32px)] hidden" role="alert" aria-live="polite">
+    <div id="broker-alert-card" class="bg-slate-900/95 border-2 border-amber-500/60 shadow-2xl rounded-xl p-4 text-xs font-sans text-slate-100 relative overflow-hidden ring-1 ring-amber-400/30">
+      <!-- 5-Second Animated Countdown Progress Bar -->
+      <div class="absolute top-0 left-0 right-0 h-1 bg-slate-800 overflow-hidden">
+        <div id="alert-progress-bar" class="h-full bg-gradient-to-r from-amber-400 via-sky-400 to-emerald-400 transition-all ease-linear" style="width: 100%;"></div>
+      </div>
+
+      <!-- Header Row: Origin & 5-Second Timer -->
+      <div class="flex items-center justify-between pb-2 border-b border-slate-800/80 mt-1">
+        <div class="flex items-center gap-2">
+          <span class="flex h-2.5 w-2.5 relative">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+          </span>
+          <span class="font-mono text-[10px] font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
+            <span>🤝 WORKFORCE NETWORK INTELLIGENCE</span>
+            <span class="text-slate-500">&bull;</span>
+            <span class="text-sky-300 font-semibold">COLLEAGUE RELATIONSHIP IDENTIFIED</span>
+          </span>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="font-mono text-[10px] text-slate-400" id="alert-timer-label">Auto-resolves in <span id="alert-countdown-display" class="font-bold text-amber-300">5.0</span>s</span>
+          <button onclick="dismissCurrentAlert()" title="Dismiss alert" class="text-slate-400 hover:text-slate-100 p-0.5 rounded hover:bg-slate-800 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Alert Body Text -->
+      <div class="my-3">
+        <p class="text-slate-200 text-xs leading-relaxed" id="alert-body-text">
+          Workforce mapping has highlighted that your former colleague <span class="font-bold text-sky-400 px-1 py-0.2 rounded bg-sky-500/10 border border-sky-500/20">Sylvia Steele</span> is <span class="font-bold text-emerald-400 px-1 py-0.2 rounded bg-emerald-500/10 border border-emerald-500/20">Lead Analyst</span> at the prospective company <span class="font-bold text-white px-1 py-0.2 rounded bg-slate-800 border border-slate-700">Meile Care Ltd</span> Data indicator <span class="font-bold text-amber-300 font-mono px-1 py-0.2 rounded bg-amber-500/10 border border-amber-500/20">[new business unit opening in Dundee Q2 2027]</span>.
+        </p>
+
+        <!-- Recognition of Value Brought by Human Touch -->
+        <div class="mt-2.5 p-2 rounded bg-purple-950/40 border border-purple-500/30 flex items-center justify-between text-[11px] font-mono">
+          <div class="flex items-center gap-1.5 text-purple-300">
+            <span class="text-sm">🤝</span>
+            <span><strong>HUMAN TOUCH ADVANTAGE:</strong> Broker intervention has potential to add <strong>16 points</strong> to probability score.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4 Broker Action Options -->
+      <div class="grid grid-cols-4 gap-2 pt-1 font-mono text-[11px]">
+        <button id="alert-btn-call" onclick="handleAlertAction('CALL')" class="px-2 py-1.5 rounded bg-sky-600 hover:bg-sky-500 text-white font-bold transition flex items-center justify-center gap-1 shadow-md">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
+          <span id="alert-call-label">CALL MIELE CARE</span>
+        </button>
+        <button id="alert-btn-monitor" onclick="handleAlertAction('MONITOR')" class="px-2 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold transition flex items-center justify-center gap-1">
+          <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+          <span>MONITOR</span>
+        </button>
+        <button id="alert-btn-promote" onclick="handleAlertAction('PROMOTE')" class="px-2 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition flex items-center justify-center gap-1 shadow-md">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path></svg>
+          <span>PROMOTE (+16)</span>
+        </button>
+        <button id="alert-btn-demote" onclick="handleAlertAction('DEMOTE')" class="px-2 py-1.5 rounded bg-slate-850 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800 transition flex items-center justify-center gap-1">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path></svg>
+          <span>DEMOTE</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: BROKER DIRECT CALL & OUTREACH CONSOLE -->
+  <div id="broker-call-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-lg shadow-2xl w-full max-w-xl flex flex-col overflow-hidden">
+      <div class="px-5 py-4 bg-slate-925 border-b border-slate-800 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg>
+          </div>
+          <div>
+            <h3 class="text-sm font-bold text-slate-100 font-mono">DIRECT BROKER OUTREACH CONSOLE</h3>
+            <p class="text-[11px] text-slate-400 mt-0.5">High-Value Relationship Warm Channel &amp; Commercial Facility Structuring</p>
+          </div>
+        </div>
+        <button onclick="closeBrokerCallModal()" class="text-slate-400 hover:text-slate-200 p-1 rounded hover:bg-slate-800 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+
+      <div class="p-5 space-y-3.5 text-xs">
+        <!-- Target Company & Colleague Banner -->
+        <div class="bg-slate-950 p-3.5 rounded border border-slate-800 flex items-start justify-between">
+          <div>
+            <div class="flex items-center gap-2">
+              <span id="call-modal-company-name" class="font-bold text-slate-100 text-sm">Meile Care Ltd</span>
+              <span id="call-modal-crn" class="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-slate-300 border border-slate-700">CRN 09841284</span>
+            </div>
+            <div class="text-[11px] text-slate-300 mt-1">
+              Contact: <strong id="call-modal-contact-name" class="text-sky-300">Sylvia Steele</strong> &bull; <span id="call-modal-contact-role" class="text-emerald-400">Lead Analyst</span>
+            </div>
+            <div class="text-[10px] text-slate-500 font-mono mt-0.5" id="call-modal-rel-context">
+              Network Link: Former Colleague (Barclays Corporate Finance / Alumni)
+            </div>
+          </div>
+          <div class="text-right">
+            <div class="text-[10px] font-mono text-purple-300 font-semibold uppercase">Human Touch Advantage</div>
+            <div class="text-base font-bold font-mono text-purple-400 mt-0.5">+16.0 PTS BOOST</div>
+          </div>
+        </div>
+
+        <!-- Verified Data Indicator -->
+        <div class="p-3 rounded bg-amber-950/40 border border-amber-500/30 text-xs">
+          <div class="flex items-center gap-1.5 font-mono text-[10px] text-amber-300 font-bold uppercase">
+            <span>⚡ VERIFIED COMMERCIAL DATA TRIGGER</span>
+          </div>
+          <p id="call-modal-data-indicator" class="text-slate-200 mt-1 leading-relaxed">
+            Workforce mapping confirmed new business unit opening in Dundee Q2 2027. Immediate working-capital requirement to bridge capex and upfront recruitment payroll prior to operating cash flows.
+          </p>
+        </div>
+
+        <!-- Facility Proposition Sizing -->
+        <div class="grid grid-cols-2 gap-3 text-xs font-mono">
+          <div class="bg-slate-950 p-2.5 rounded border border-slate-800">
+            <div class="text-[10px] text-slate-400 uppercase">RECOMMENDED FACILITY</div>
+            <div id="call-modal-facility-type" class="text-sky-300 font-bold mt-0.5">Growth CapEx &amp; Working Capital</div>
+            <div id="call-modal-facility-limit" class="text-[10px] text-slate-400 mt-0.5">Indicative Limit: £650,000</div>
+          </div>
+          <div class="bg-slate-950 p-2.5 rounded border border-slate-800">
+            <div class="text-[10px] text-slate-400 uppercase">DIRECT DIAL / EXTENSION</div>
+            <div id="call-modal-phone" class="text-emerald-400 font-bold mt-0.5">+44 (0) 1382 938 102</div>
+            <div class="text-[10px] text-slate-400 mt-0.5">Verified Direct Line</div>
+          </div>
+        </div>
+
+        <!-- Outreach Notes / Discussion Record -->
+        <div>
+          <label class="block text-[10px] font-mono text-slate-400 mb-1">Broker Call Log &amp; Strategy Notes</label>
+          <textarea id="call-modal-notes" rows="3" class="w-full bg-slate-950 border border-slate-700 rounded p-2.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500 font-sans" placeholder="Record discussion outcomes, requested facility limits, terms proposed, or follow-up milestones..."></textarea>
+        </div>
+      </div>
+
+      <div class="px-5 py-3 bg-slate-925 border-t border-slate-800 flex items-center justify-between">
+        <button onclick="closeBrokerCallModal()" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs transition">
+          Close
+        </button>
+        <button onclick="submitBrokerCallOutcome()" class="px-4 py-1.5 rounded bg-sky-600 hover:bg-sky-500 text-white font-medium text-xs flex items-center gap-1.5 transition shadow">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+          Log Call &amp; Apply +16pt Boost
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Toast Container for Real-Time Action Feedback -->
+  <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
   <!-- Floating Intelligence Snapshot Hovercard (Context-Aware Surfacing Rationale) -->
   <div id="intel-hovercard" class="intel-hovercard hidden bg-slate-900 border border-slate-700/80 rounded-lg p-3.5 text-xs font-sans text-slate-200">
     <!-- Header with Live Score and Band -->
@@ -1319,6 +1505,23 @@
       <div class="text-right">
         <div class="text-[9px] text-slate-400 uppercase">EVOI VALUE</div>
         <div id="hovercard-evoi-val" class="text-emerald-400 font-bold">+£18.50 Net</div>
+      </div>
+    </div>
+
+    <!-- Recognition of Value Brought by the Human Touch -->
+    <div class="mt-2 p-2 rounded bg-purple-950/40 border border-purple-500/30 flex items-center justify-between text-[11px] font-mono">
+      <div>
+        <div class="text-[9px] text-purple-300 uppercase font-bold flex items-center gap-1">
+          <span>🤝 VALUE OF THE HUMAN TOUCH</span>
+        </div>
+        <div id="hovercard-human-touch-status" class="text-slate-300 text-[10px] mt-0.5">
+          Broker intervention adds +16.0 pts to conversion probability
+        </div>
+      </div>
+      <div class="text-right shrink-0">
+        <span id="hovercard-human-boost-pill" class="px-1.5 py-0.5 rounded text-[10px] font-mono bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold">
+          +16.0 PTS
+        </span>
       </div>
     </div>
 
@@ -1762,6 +1965,29 @@
       const score = (prospect?.liquidity_strain_score !== undefined ? prospect.liquidity_strain_score : profile?.score_summary?.score) || 0;
       const coverage = (prospect?.evidence_coverage || feat?.evidence_coverage || "").toLowerCase();
 
+      // Case 0: Human Touch / Broker Alumni & Colleague Advantage
+      if (prospect?.human_touch_boost || summary.includes("sylvia steele") || summary.includes("dundee")) {
+        return {
+          title: "HUMAN TOUCH & WORKFORCE NETWORK ADVANTAGE",
+          icon: "🤝",
+          provider: "WORKFORCE MAPPING & ALUMNI NETWORK",
+          providerClass: "text-purple-300 bg-purple-500/20 border-purple-500/40",
+          boxClass: "bg-purple-950/60 border-purple-500/40",
+          rationale: "Workforce network mapping highlighted former colleague Sylvia Steele as Lead Analyst at Meile Care Ltd. Broker intervention adds +16.0 points to probability score, unlocking warm executive dialogue for Dundee Q2 2027 business unit expansion.",
+          provenance: "workforce_mapping:former_colleague_trace",
+          chargesText: "Statutory Filings Verified",
+          chargesPts: "+30.0 Filings Pts",
+          dbtText: "Payment Risk Structured",
+          dbtPts: "+18.0 Strain Pts",
+          payrollText: "Dundee Q2 2027 Expansion",
+          payrollPts: "+18.4 Payroll Pts",
+          corrobText: "Human Corroborated",
+          corrobPts: "🤝 +16.0 Pts Boost",
+          facilityFit: "Growth CapEx & Working Capital Facility",
+          evoiVal: "+£28.00 Net (HIGH)"
+        };
+      }
+
       // Case 1: Statutory Charge Satisfaction (MR04)
       if (summary.includes("mr04") || summary.includes("charge release") || (feat.charges_satisfied_90d && feat.charges_satisfied_90d > 0)) {
         const scope = feat.latest_charge_scope ? feat.latest_charge_scope.toUpperCase() : "FULL";
@@ -1947,6 +2173,23 @@
       // 4. Recommended Facility & EVOI
       document.getElementById("hovercard-facility-fit").textContent = intel.facilityFit;
       document.getElementById("hovercard-evoi-val").textContent = intel.evoiVal;
+
+      // 5. Human Touch Recognition Status
+      const htStatusEl = document.getElementById("hovercard-human-touch-status");
+      const htPillEl = document.getElementById("hovercard-human-boost-pill");
+      if (htStatusEl && htPillEl) {
+        if (prospect?.human_touch_boost) {
+          htStatusEl.textContent = "🤝 Active: +16.0 pt broker intervention boost applied to score";
+          htStatusEl.className = "text-purple-300 font-semibold text-[10px] mt-0.5";
+          htPillEl.className = "px-1.5 py-0.5 rounded text-[10px] font-mono bg-purple-500 text-white font-bold";
+          htPillEl.textContent = "ACTIVE (+16)";
+        } else {
+          htStatusEl.textContent = "Broker intervention has potential to add +16.0 pts to probability score";
+          htStatusEl.className = "text-slate-300 text-[10px] mt-0.5";
+          htPillEl.className = "px-1.5 py-0.5 rounded text-[10px] font-mono bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold";
+          htPillEl.textContent = "+16.0 PTS";
+        }
+      }
     }
 
     function showHovercard(event, crn) {
@@ -2051,6 +2294,7 @@
     document.addEventListener("DOMContentLoaded", () => {
       refreshData();
       initHovercardListeners();
+      initBrokerAlertsEngine();
     });
 
     async function refreshData() {
@@ -2148,9 +2392,10 @@
               onmouseleave="hideHovercard()"
               onclick="hideHovercard(); lockRadarOnCompany('${p.crn}'); openProfile('${p.crn}')">
             <td class="py-3 px-4">
-              <div class="font-semibold text-slate-100 group-hover:text-sky-400 flex items-center gap-1.5">
+              <div class="font-semibold text-slate-100 group-hover:text-sky-400 flex items-center gap-1.5 flex-wrap">
                 ${p.company_name}
                 ${p.is_synthetic ? '<span class="text-[9px] font-mono px-1 rounded bg-slate-800 text-slate-400">DEMO</span>' : ''}
+                ${p.human_touch_boost ? '<span class="text-[9px] font-mono px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/40 font-bold flex items-center gap-1 shrink-0" title="Broker Intervention Advantage Active (+16.0 pts)">🤝 +16pt HUMAN TOUCH</span>' : ''}
                 <span id="scan-indicator-${p.crn}" class="hidden text-[9px] font-mono px-1.5 py-0.2 rounded bg-sky-500/20 text-sky-300 border border-sky-500/40 animate-pulse">
                   ● RADAR
                 </span>
@@ -2161,6 +2406,7 @@
               <span class="text-sm font-bold font-mono px-2 py-0.5 rounded border ${scoreBadge}">
                 ${p.liquidity_strain_score.toFixed(1)}
               </span>
+              ${p.human_touch_boost ? '<div class="text-[9px] font-mono text-purple-300 mt-0.5 font-bold">+16pt Boost</div>' : ''}
             </td>
             <td class="py-3 px-3">
               <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-slate-800 text-slate-300">
@@ -2473,8 +2719,38 @@
         if (!res.ok) return;
         const d = await res.json();
 
+        const prospect = currentProspects.find(p => p.crn === crn);
+        const isBoosted = prospect?.human_touch_boost || false;
+        const baseFunded = d.p_conversion_funded;
+        const effectiveFunded = isBoosted ? Math.min(0.99, baseFunded + 0.16) : baseFunded;
+
         document.getElementById("modal-p-opp").textContent = `${(d.p_qualified_opportunity * 100).toFixed(1)}%`;
-        document.getElementById("modal-p-funded").textContent = `${(d.p_conversion_funded * 100).toFixed(1)}%`;
+        const pFundedEl = document.getElementById("modal-p-funded");
+        pFundedEl.textContent = `${(effectiveFunded * 100).toFixed(1)}%`;
+        if (isBoosted) {
+          pFundedEl.className = "text-lg font-bold font-mono text-purple-400 mt-1 flex items-center gap-1.5";
+          pFundedEl.innerHTML = `${(effectiveFunded * 100).toFixed(1)}% <span class="text-[9px] font-mono px-1 rounded bg-purple-500/20 text-purple-300 border border-purple-500/40">+16% UPLIFT</span>`;
+        } else {
+          pFundedEl.className = "text-lg font-bold font-mono text-sky-400 mt-1";
+          pFundedEl.textContent = `${(baseFunded * 100).toFixed(1)}%`;
+        }
+
+        const boostBadge = document.getElementById("modal-human-touch-badge");
+        const boostBtn = document.getElementById("modal-human-boost-btn");
+        if (boostBadge && boostBtn) {
+          if (isBoosted) {
+            boostBadge.textContent = "Active: +16.0 Pts Uplift Applied";
+            boostBadge.className = "px-1.5 py-0.2 rounded text-[10px] font-mono bg-purple-500 text-white font-bold";
+            boostBtn.innerHTML = "<span>🤝 Remove Human Boost</span>";
+            boostBtn.className = "shrink-0 px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-mono text-xs font-semibold flex items-center gap-1.5 transition border border-slate-700";
+          } else {
+            boostBadge.textContent = "+16.0 Pts Potential";
+            boostBadge.className = "px-1.5 py-0.2 rounded text-[10px] font-mono bg-purple-500/20 text-purple-300 border border-purple-500/40";
+            boostBtn.innerHTML = "<span>🤝 Apply +16pt Boost</span>";
+            boostBtn.className = "shrink-0 px-3 py-1.5 rounded bg-purple-600 hover:bg-purple-500 text-white font-mono text-xs font-semibold flex items-center gap-1.5 transition shadow";
+          }
+        }
+
         document.getElementById("modal-p-funded-ml").textContent = `ML Shadow: ${(d.p_funded_ml_shadow * 100).toFixed(1)}%`;
         document.getElementById("modal-est-facility").textContent = `£${d.estimated_facility_size_gbp.toLocaleString('en-GB')}`;
         document.getElementById("modal-est-commission").textContent = `£${d.estimated_commercial_contribution_gbp.toLocaleString('en-GB')}`;
@@ -3066,6 +3342,371 @@
       } else if (tab === "audiences") {
         loadAudiencesTab();
       }
+    }
+
+    // ==========================================
+    // HUMAN TOUCH & WORKFORCE NETWORK ALERT ENGINE
+    // ==========================================
+
+    function toggleCurrentProspectHumanBoost() {
+      if (!currentCrn) return;
+      let prospect = currentProspects.find(p => p.crn === currentCrn);
+      if (!prospect) return;
+
+      prospect.human_touch_boost = !prospect.human_touch_boost;
+      if (prospect.human_touch_boost) {
+        prospect.liquidity_strain_score = Math.min(99.9, prospect.liquidity_strain_score + 16.0);
+        if (prospect.liquidity_strain_score >= 75) prospect.score_band = "strong";
+        showToast(`🤝 Applied +16.0 pt Human Touch Boost to ${prospect.company_name}!`, "success");
+        pushTerminalLog({
+          time: new Date().toTimeString().slice(0, 8),
+          tag: "HUMAN_BOOST",
+          color: "text-purple-300 bg-purple-500/10 border-purple-500/30",
+          crn: currentCrn,
+          msg: `Broker applied +16.0 pt human relationship advantage to ${prospect.company_name} (New Score: ${prospect.liquidity_strain_score.toFixed(1)})`,
+          category: "governance"
+        });
+      } else {
+        prospect.liquidity_strain_score = Math.max(0, prospect.liquidity_strain_score - 16.0);
+        if (prospect.liquidity_strain_score < 75 && prospect.liquidity_strain_score >= 50) prospect.score_band = "elevated";
+        showToast(`Removed Human Touch Boost from ${prospect.company_name}.`, "info");
+      }
+
+      // Update modal header score
+      document.getElementById("modal-score-value").textContent = prospect.liquidity_strain_score.toFixed(1);
+      document.getElementById("modal-score-band").textContent = prospect.score_band.toUpperCase();
+
+      // Re-render table and reload adaptive assessment view
+      applyFilters();
+      loadAdaptiveAssessment(currentCrn);
+    }
+
+    const sampleColleagueAlerts = [
+      {
+        id: "alert-meile-01",
+        colleagueName: "Sylvia Steele",
+        colleagueRole: "Lead Analyst",
+        companyName: "Meile Care Ltd",
+        companyCrn: "09841284",
+        relationshipContext: "Former Colleague (Corporate Finance / Alumni Network)",
+        dataIndicator: "new business unit opening in Dundee Q2 2027",
+        facilityType: "Growth CapEx & Working Capital Facility",
+        facilitySizeGbp: 650000,
+        estCommissionGbp: 13000,
+        phone: "+44 (0) 1382 938 102",
+        callLabel: "CALL MIELE CARE",
+        scoreBase: 68.4,
+        scoreBoosted: 84.4,
+        fullHtml: `Workforce mapping has highlighted that your former colleague <span class="font-bold text-sky-400 px-1 py-0.2 rounded bg-sky-500/10 border border-sky-500/20">Sylvia Steele</span> is <span class="font-bold text-emerald-400 px-1 py-0.2 rounded bg-emerald-500/10 border border-emerald-500/20">Lead Analyst</span> at the prospective company <span class="font-bold text-white px-1 py-0.2 rounded bg-slate-800 border border-slate-700">Meile Care Ltd</span> Data indicator <span class="font-bold text-amber-300 font-mono px-1 py-0.2 rounded bg-amber-500/10 border border-amber-500/20">[new business unit opening in Dundee Q2 2027]</span>.`
+      },
+      {
+        id: "alert-apex-02",
+        colleagueName: "Marcus Vance",
+        colleagueRole: "Chief Financial Officer",
+        companyName: "Apex Precision Engineering Ltd",
+        companyCrn: "08931201",
+        relationshipContext: "Former Colleague (Commercial Lending Network)",
+        dataIndicator: "Form MR04 charge release freeing £1.2M unencumbered assets",
+        facilityType: "Confidential Invoice Discounting & Asset Refinance",
+        facilitySizeGbp: 1200000,
+        estCommissionGbp: 24000,
+        phone: "+44 (0) 121 496 0833",
+        callLabel: "CALL APEX PRECISION",
+        scoreBase: 78.4,
+        scoreBoosted: 94.4,
+        fullHtml: `Workforce mapping has highlighted that your former colleague <span class="font-bold text-sky-400 px-1 py-0.2 rounded bg-sky-500/10 border border-sky-500/20">Marcus Vance</span> is <span class="font-bold text-emerald-400 px-1 py-0.2 rounded bg-emerald-500/10 border border-emerald-500/20">Chief Financial Officer</span> at the prospective company <span class="font-bold text-white px-1 py-0.2 rounded bg-slate-800 border border-slate-700">Apex Precision Engineering Ltd</span> Data indicator <span class="font-bold text-amber-300 font-mono px-1 py-0.2 rounded bg-amber-500/10 border border-amber-500/20">[Form MR04 charge release freeing £1.2M unencumbered assets]</span>.`
+      },
+      {
+        id: "alert-clydeside-03",
+        colleagueName: "Elena Rostova",
+        colleagueRole: "Financial Controller",
+        companyName: "Clydeside Heavy Fabrication Ltd",
+        companyCrn: "SC412891",
+        relationshipContext: "Former Colleague (Scottish Enterprise Advisory)",
+        dataIndicator: "31% engineering hiring surge for green port contracts",
+        facilityType: "Asset Refinance & Revolving Equipment Facility",
+        facilitySizeGbp: 850000,
+        estCommissionGbp: 17000,
+        phone: "+44 (0) 141 552 9180",
+        callLabel: "CALL CLYDESIDE",
+        scoreBase: 82.5,
+        scoreBoosted: 98.5,
+        fullHtml: `Workforce mapping has highlighted that your former colleague <span class="font-bold text-sky-400 px-1 py-0.2 rounded bg-sky-500/10 border border-sky-500/20">Elena Rostova</span> is <span class="font-bold text-emerald-400 px-1 py-0.2 rounded bg-emerald-500/10 border border-emerald-500/20">Financial Controller</span> at the prospective company <span class="font-bold text-white px-1 py-0.2 rounded bg-slate-800 border border-slate-700">Clydeside Heavy Fabrication Ltd</span> Data indicator <span class="font-bold text-amber-300 font-mono px-1 py-0.2 rounded bg-amber-500/10 border border-amber-500/20">[31% engineering hiring surge for green port contracts]</span>.`
+      }
+    ];
+
+    let currentAlert = null;
+    let alertTimerInterval = null;
+    let alertCountdownTotalMs = 5000;
+    let alertRemainingMs = 5000;
+    let isAlertHovered = false;
+    let alertRotationIndex = 0;
+    let alertScheduleInterval = null;
+
+    function initBrokerAlertsEngine() {
+      const hud = document.getElementById("broker-alert-hud");
+      if (!hud) return;
+
+      // Pause countdown on hover, resume on leave
+      hud.addEventListener("mouseenter", () => {
+        isAlertHovered = true;
+        const label = document.getElementById("alert-timer-label");
+        if (label) label.innerHTML = `Auto-resolves in <span id="alert-countdown-display" class="font-bold text-amber-300">${(alertRemainingMs / 1000).toFixed(1)}</span>s <span class="text-sky-400 font-mono text-[9px]">(paused on hover)</span>`;
+      });
+
+      hud.addEventListener("mouseleave", () => {
+        isAlertHovered = false;
+        const label = document.getElementById("alert-timer-label");
+        if (label) label.innerHTML = `Auto-resolves in <span id="alert-countdown-display" class="font-bold text-amber-300">${(alertRemainingMs / 1000).toFixed(1)}</span>s`;
+      });
+
+      // Schedule first alert after 4.0s of page load
+      setTimeout(() => {
+        triggerSimulatedAlert(0);
+      }, 4000);
+
+      // Subsequent recurring background alerts every 45s
+      alertScheduleInterval = setInterval(() => {
+        if (!currentAlert) {
+          alertRotationIndex = (alertRotationIndex + 1) % sampleColleagueAlerts.length;
+          triggerSimulatedAlert(alertRotationIndex);
+        }
+      }, 45000);
+    }
+
+    function triggerSimulatedAlert(index = null) {
+      if (index === null) {
+        alertRotationIndex = (alertRotationIndex + 1) % sampleColleagueAlerts.length;
+        index = alertRotationIndex;
+      }
+
+      currentAlert = sampleColleagueAlerts[index];
+      const hud = document.getElementById("broker-alert-hud");
+      if (!hud) return;
+
+      // Reset state & elements
+      document.getElementById("alert-body-text").innerHTML = currentAlert.fullHtml;
+      document.getElementById("alert-call-label").textContent = currentAlert.callLabel;
+
+      alertCountdownTotalMs = 5000;
+      alertRemainingMs = 5000;
+      isAlertHovered = false;
+
+      updateAlertCountdownUI(1.0, "5.0");
+
+      hud.classList.remove("hidden", "dismissing");
+      void hud.offsetWidth; // Force layout
+
+      // Start tick timer
+      clearInterval(alertTimerInterval);
+      const stepMs = 50;
+      alertTimerInterval = setInterval(() => {
+        if (!isAlertHovered) {
+          alertRemainingMs -= stepMs;
+          if (alertRemainingMs <= 0) {
+            alertRemainingMs = 0;
+            clearInterval(alertTimerInterval);
+            resolveCurrentAlert("timeout");
+          } else {
+            const frac = alertRemainingMs / alertCountdownTotalMs;
+            const sec = (alertRemainingMs / 1000).toFixed(1);
+            updateAlertCountdownUI(frac, sec);
+          }
+        }
+      }, stepMs);
+
+      // Push signal event to terminal stream
+      pushTerminalLog({
+        time: new Date().toTimeString().slice(0, 8),
+        tag: "WORKFORCE_ALERT",
+        color: "text-amber-400 bg-amber-500/10 border-amber-500/30",
+        crn: currentAlert.companyCrn,
+        msg: `Workforce mapping match: Former colleague ${currentAlert.colleagueName} (${currentAlert.colleagueRole}) @ ${currentAlert.companyName}`,
+        category: "workforce"
+      });
+    }
+
+    function updateAlertCountdownUI(fraction, secondsText) {
+      const bar = document.getElementById("alert-progress-bar");
+      if (bar) bar.style.width = `${Math.max(0, fraction * 100)}%`;
+      const num = document.getElementById("alert-countdown-display");
+      if (num) num.textContent = secondsText;
+    }
+
+    function dismissCurrentAlert() {
+      resolveCurrentAlert("dismissed");
+    }
+
+    function resolveCurrentAlert(reason = "resolved") {
+      clearInterval(alertTimerInterval);
+      const hud = document.getElementById("broker-alert-hud");
+      if (!hud) return;
+
+      hud.classList.add("dismissing");
+      setTimeout(() => {
+        hud.classList.add("hidden");
+        hud.classList.remove("dismissing");
+        currentAlert = null;
+      }, 300);
+
+      if (reason === "timeout") {
+        pushTerminalLog({
+          time: new Date().toTimeString().slice(0, 8),
+          tag: "ALERT_AUTO_RESOLVED",
+          color: "text-slate-400 bg-slate-800 border-slate-700",
+          crn: currentAlert?.companyCrn || "SYSTEM",
+          msg: `Workforce alert auto-resolved after 5.0s of inactivity.`,
+          category: "governance"
+        });
+      }
+    }
+
+    function handleAlertAction(action) {
+      if (!currentAlert) return;
+      const alertData = { ...currentAlert };
+      resolveCurrentAlert("action_taken");
+
+      if (action === "CALL") {
+        openBrokerCallModal(alertData);
+      } else if (action === "MONITOR") {
+        showToast(`👁️ ${alertData.companyName} added to active 30-Day Warm Surveillance Radar.`, "info");
+        pushTerminalLog({
+          time: new Date().toTimeString().slice(0, 8),
+          tag: "WATCHLIST_ADD",
+          color: "text-sky-300 bg-sky-500/10 border-sky-500/30",
+          crn: alertData.companyCrn,
+          msg: `Broker retained ${alertData.companyName} on active 30-day monitoring (Warm link: ${alertData.colleagueName})`,
+          category: "governance"
+        });
+      } else if (action === "PROMOTE") {
+        promoteCompanyFromAlert(alertData);
+      } else if (action === "DEMOTE") {
+        showToast(`⏸️ ${alertData.companyName} alert demoted and snoozed for 30 days.`, "info");
+        pushTerminalLog({
+          time: new Date().toTimeString().slice(0, 8),
+          tag: "ALERT_DEMOTED",
+          color: "text-slate-400 bg-slate-800 border-slate-700",
+          crn: alertData.companyCrn,
+          msg: `Broker demoted ${alertData.companyName} workforce match. Snoozed for 30 days.`,
+          category: "governance"
+        });
+      }
+    }
+
+    function promoteCompanyFromAlert(alertData) {
+      let existing = currentProspects.find(p => p.crn === alertData.companyCrn);
+      if (!existing) {
+        existing = {
+          crn: alertData.companyCrn,
+          company_name: alertData.companyName,
+          company_status: "active",
+          liquidity_strain_score: alertData.scoreBoosted,
+          score_band: "strong",
+          primary_signals_summary: `Workforce Expansion: ${alertData.dataIndicator} (${alertData.colleagueName} link)`,
+          latest_signal_date: new Date().toISOString(),
+          evidence_coverage: "strong",
+          review_status: "verified_opportunity",
+          assigned_broker_name: "Current User (Direct Link)",
+          is_synthetic: true,
+          human_touch_boost: true
+        };
+        currentProspects.unshift(existing);
+      } else {
+        existing.human_touch_boost = true;
+        existing.liquidity_strain_score = Math.min(99.9, existing.liquidity_strain_score + 16.0);
+        existing.score_band = "strong";
+        existing.review_status = "verified_opportunity";
+      }
+
+      applyFilters();
+      showToast(`🚀 ${alertData.companyName} PROMOTED! Applied +16.0 pt Human Touch Boost (Score: ${alertData.scoreBoosted.toFixed(1)}).`, "success");
+
+      lockRadarOnCompany(alertData.companyCrn);
+
+      pushTerminalLog({
+        time: new Date().toTimeString().slice(0, 8),
+        tag: "HUMAN_PROMOTION",
+        color: "text-purple-300 bg-purple-500/20 border-purple-500/40",
+        crn: alertData.companyCrn,
+        msg: `PROMOTED ${alertData.companyName}: Applied +16.0 pt broker intervention uplift to probability score (Final: ${alertData.scoreBoosted.toFixed(1)} pts).`,
+        category: "ml"
+      });
+    }
+
+    // --- Broker Direct Call Modal Logic ---
+    function openBrokerCallModal(alertData) {
+      document.getElementById("call-modal-company-name").textContent = alertData.companyName;
+      document.getElementById("call-modal-crn").textContent = `CRN ${alertData.companyCrn}`;
+      document.getElementById("call-modal-contact-name").textContent = alertData.colleagueName;
+      document.getElementById("call-modal-contact-role").textContent = alertData.colleagueRole;
+      document.getElementById("call-modal-rel-context").textContent = `Network Link: ${alertData.relationshipContext}`;
+      document.getElementById("call-modal-data-indicator").textContent = `Workforce mapping confirmed ${alertData.dataIndicator}. High-conviction working-capital demand to bridge capex and upfront recruitment lag.`;
+      document.getElementById("call-modal-facility-type").textContent = alertData.facilityType;
+      document.getElementById("call-modal-facility-limit").textContent = `Indicative Limit: £${alertData.facilitySizeGbp.toLocaleString('en-GB')}`;
+      document.getElementById("call-modal-phone").textContent = alertData.phone;
+      document.getElementById("call-modal-notes").value = `Discussed ${alertData.dataIndicator}. Verified borrowing requirement of ~£${alertData.facilitySizeGbp.toLocaleString('en-GB')}. Executive dialogue initiated via warm alumni relationship.`;
+
+      const modal = document.getElementById("broker-call-modal");
+      modal.dataset.crn = alertData.companyCrn;
+      modal.dataset.companyName = alertData.companyName;
+      modal.dataset.scoreBoosted = alertData.scoreBoosted;
+      modal.dataset.colleagueName = alertData.colleagueName;
+      modal.dataset.dataIndicator = alertData.dataIndicator;
+
+      modal.classList.remove("hidden");
+    }
+
+    function closeBrokerCallModal() {
+      document.getElementById("broker-call-modal").classList.add("hidden");
+    }
+
+    function submitBrokerCallOutcome() {
+      const modal = document.getElementById("broker-call-modal");
+      const crn = modal.dataset.crn;
+      const compName = modal.dataset.companyName;
+      const scoreBoosted = parseFloat(modal.dataset.scoreBoosted) || 84.4;
+      const colleague = modal.dataset.colleagueName;
+      const indicator = modal.dataset.dataIndicator;
+
+      promoteCompanyFromAlert({
+        companyCrn: crn,
+        companyName: compName,
+        colleagueName: colleague,
+        scoreBoosted: scoreBoosted,
+        dataIndicator: indicator
+      });
+
+      closeBrokerCallModal();
+      showToast(`📞 Broker call logged with ${colleague} at ${compName}. +16pt Human Touch Boost active!`, "success");
+    }
+
+    // --- Toast Notification Feedback System ---
+    function showToast(message, type = "info") {
+      const container = document.getElementById("toast-container");
+      if (!container) return;
+
+      const toast = document.createElement("div");
+      let colorClass = "bg-slate-900 border-sky-500/40 text-slate-100";
+      if (type === "success") colorClass = "bg-slate-900 border-emerald-500/60 text-emerald-300 ring-1 ring-emerald-500/30";
+      else if (type === "warning") colorClass = "bg-slate-900 border-amber-500/60 text-amber-300";
+      else if (type === "error") colorClass = "bg-slate-900 border-rose-500/60 text-rose-300";
+
+      toast.className = `p-3 rounded-lg border shadow-xl text-xs font-mono transition-all duration-300 transform translate-y-2 opacity-0 pointer-events-auto max-w-md flex items-center justify-between gap-3 ${colorClass}`;
+      toast.innerHTML = `
+        <div class="flex items-center gap-2">
+          <span>${message}</span>
+        </div>
+        <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-white">&times;</button>
+      `;
+
+      container.appendChild(toast);
+      void toast.offsetWidth; // Force reflow
+      toast.classList.remove("translate-y-2", "opacity-0");
+
+      setTimeout(() => {
+        toast.classList.add("translate-y-2", "opacity-0");
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
     }
   </script>
 </body>
