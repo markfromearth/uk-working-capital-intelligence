@@ -1,3 +1,4 @@
+import os
 import pytest
 from datetime import datetime, timedelta, timezone
 from starlette.testclient import TestClient
@@ -294,7 +295,16 @@ def test_machine_learning_shadow_mode_and_calibration():
     assert 0.0 <= pred["p_funded_ml"] <= 1.0
     assert pred["shadow_mode"] is True
 
+    # Clean up test-generated outcomes so real DB remains clean
+    db.query(CommercialFunnelOutcome).delete()
+    db.commit()
     db.close()
+
+    if os.path.exists("ml_models/opportunity_classifier_v1.pkl"):
+        try:
+            os.remove("ml_models/opportunity_classifier_v1.pkl")
+        except OSError:
+            pass
 
 # 7. CRN Normalization & RBAC Security
 

@@ -1,19 +1,32 @@
 import os
-import joblib
-import numpy as np
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
-from sklearn.linear_model import LogisticRegression
-from sklearn.ensemble import HistGradientBoostingClassifier
-from sklearn.calibration import CalibratedClassifierCV
-from sklearn.metrics import roc_auc_score, brier_score_loss, precision_score
 from sqlalchemy.orm import Session
+
+try:
+    import joblib
+    import numpy as np
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.ensemble import HistGradientBoostingClassifier
+    from sklearn.calibration import CalibratedClassifierCV
+    from sklearn.metrics import roc_auc_score, brier_score_loss, precision_score
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    joblib = None  # type: ignore
+    np = None  # type: ignore
+    SKLEARN_AVAILABLE = False
 
 from backend.app.core.logging import logger
 from backend.app.models.feature import CompanyFeatureSnapshot
 from backend.app.models.investigation import CommercialOpportunityAssessment
 from backend.app.services.feature_store import FeatureStoreService
 from backend.app.services.outcome_learning import OutcomeLearningService
+from backend.app.ml.features import (
+    FEATURE_NAMES,
+    extract_features_dict,
+    extract_features_vector,
+    get_feature_spec_hash
+)
 
 ML_MODEL_VERSION = "v1.1.0-ml-shadow"
 MODEL_STORAGE_PATH = "ml_models/opportunity_classifier_v1.pkl"
@@ -28,11 +41,15 @@ class MachineLearningOpportunityModel:
     def __init__(self, db: Session, model_path: Optional[str] = None):
         self.db = db
         self.model_path = model_path or MODEL_STORAGE_PATH
-        self.model: Optional[CalibratedClassifierCV] = None
+        self.model = None
         self._load_or_init_model()
 
     def _load_or_init_model(self):
-        """Loads serialized model if available on disk."""
+        """Loads serialized model if available on disk and dependencies are present."""
+        if not SKLEARN_AVAILABLE or joblib is None:
+            logger.info("scikit-learn or joblib not available; operating in deterministic rules fallback mode.")
+            return
+
         if os.path.exists(self.model_path):
             try:
                 self.model = joblib.load(self.model_path)
@@ -48,13 +65,23 @@ class MachineLearningOpportunityModel:
         """
         Trains calibrated machine learning model using time-aware outcome records.
         Returns training metrics (ROC-AUC, Brier score, sample count).
+        Gracefully refuses to train if dependencies or samples are insufficient.
         """
+        if not SKLEARN_AVAILABLE:
+            return {
+                "trained": False,
+                "model_version": ML_MODEL_VERSION,
+                "message": "scikit-learn is not installed in the current environment.",
+                "sample_count": 0
+            }
+
         outcome_service = OutcomeLearningService(self.db)
         X, y, feature_names = outcome_service.build_time_aware_training_dataset()
 
         if len(X) < min_samples:
             return {
                 "trained": False,
+                "model_version": ML_MODEL_VERSION,
                 "message": f"Insufficient training data. Found {len(X)} samples; minimum required is {min_samples}.",
                 "sample_count": len(X)
             }
@@ -67,6 +94,7 @@ class MachineLearningOpportunityModel:
         if len(unique_classes) < 2:
             return {
                 "trained": False,
+                "model_version": ML_MODEL_VERSION,
                 "message": f"Training dataset lacks class diversity (all outcomes are {unique_classes[0]}). Need positive and negative outcomes.",
                 "sample_count": len(X)
             }
@@ -115,35 +143,29 @@ class MachineLearningOpportunityModel:
     ) -> Dict[str, Any]:
         """
         Generates calibrated ML probability for a company feature snapshot.
-        If model is un-trained, returns deterministic fallback estimate.
+        If model is un-trained or dependencies are absent, returns deterministic fallback estimate.
+        Uses canonical FEATURE_SPEC vector to prevent training/serving skew.
         """
-        vec = np.array([[
-            float(snapshot.charges_satisfied_90d or 0),
-            float(snapshot.charges_created_90d or 0),
-            float(snapshot.age_latest_charge_satisfaction_days or 180.0),
-            float(snapshot.dbt_current_days if snapshot.dbt_current_days is not None else 0.0),
-            float(snapshot.dbt_trend_90d if snapshot.dbt_trend_90d is not None else 0.0),
-            float(snapshot.headcount_current or 10),
-            float(snapshot.headcount_growth_90d_pct if snapshot.headcount_growth_90d_pct is not None else 0.0),
-            float(snapshot.adverse_insolvency_events_count or 0),
-            float(snapshot.corroboration_signal_count or 0),
-            float(snapshot.distinct_source_count or 0)
-        ]])
+        if self.model is not None and SKLEARN_AVAILABLE and np is not None:
+            try:
+                vec = np.array([extract_features_vector(snapshot)])
+                proba = float(self.model.predict_proba(vec)[0][1])
+                return {
+                    "p_funded_ml": round(proba, 3),
+                    "model_version": ML_MODEL_VERSION,
+                    "is_ml_active": True,
+                    "shadow_mode": True
+                }
+            except Exception as e:
+                logger.warning(f"ML inference exception: {e}. Falling back to deterministic rules calculation.")
 
-        if self.model is not None:
-            proba = float(self.model.predict_proba(vec)[0][1])
-            return {
-                "p_funded_ml": round(proba, 3),
-                "model_version": ML_MODEL_VERSION,
-                "is_ml_active": True,
-                "shadow_mode": True
-            }
-        else:
-            # Deterministic empirical fallback
-            heuristic = min(0.85, 0.15 + (float(snapshot.charges_satisfied_90d or 0) * 0.20) + (float(snapshot.dbt_current_days or 0.0) * 0.01))
-            return {
-                "p_funded_ml": round(heuristic, 3),
-                "model_version": "v1.0.0-rules-fallback",
-                "is_ml_active": False,
-                "shadow_mode": True
-            }
+        # Deterministic empirical fallback
+        charges_count = float(getattr(snapshot, "charges_satisfied_90d", 0) or 0)
+        dbt = float(getattr(snapshot, "dbt_current_days", 0.0) or 0.0)
+        heuristic = min(0.85, 0.15 + (charges_count * 0.20) + (dbt * 0.01))
+        return {
+            "p_funded_ml": round(heuristic, 3),
+            "model_version": "v1.0.0-rules-fallback",
+            "is_ml_active": False,
+            "shadow_mode": True
+        }

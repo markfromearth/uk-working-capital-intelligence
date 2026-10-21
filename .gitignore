@@ -34,3 +34,6 @@ node_modules/
 # System
 .DS_Store
 *.log
+
+# Machine Learning Artifacts
+ml_models/*.pkl
