@@ -141,6 +141,48 @@ class ApprovedToolRegistry:
             )
         )
 
+        # 6. Companies House Officers & Directorships Discovery
+        self.register_tool(
+            ToolDefinition(
+                tool_name="companies_house_officers_lookup",
+                provider_name="companies_house",
+                description="Statutory active and historical directors, secretaries, and corporate governance appointments.",
+                cost_gbp=0.00,  # Official statutory registry free API
+                rate_limit_per_min=120,
+                timeout_seconds=8.0,
+                data_use_policy="statutory_public_register_b2b_only",
+                is_live_ready=ch_status.status == AdapterHealthStatus.LIVE
+            )
+        )
+
+        # 7. Companies House PSC Register Discovery
+        self.register_tool(
+            ToolDefinition(
+                tool_name="companies_house_psc_lookup",
+                provider_name="companies_house",
+                description="Persons with Significant Control (PSC) statutory register, shareholding tiers, and voting control.",
+                cost_gbp=0.00,
+                rate_limit_per_min=120,
+                timeout_seconds=8.0,
+                data_use_policy="statutory_public_register_b2b_only",
+                is_live_ready=ch_status.status == AdapterHealthStatus.LIVE
+            )
+        )
+
+        # 8. Decision-Maker Multi-Signal Verification
+        self.register_tool(
+            ToolDefinition(
+                tool_name="decision_maker_identity_verify",
+                provider_name="companies_house",
+                description="Multi-signal corroboration of candidate decision-maker identity against active statutory directorships.",
+                cost_gbp=0.50,
+                rate_limit_per_min=60,
+                timeout_seconds=10.0,
+                data_use_policy="b2b_professional_identity_verification_only",
+                is_live_ready=True
+            )
+        )
+
     @property
     def circuit_breakers(self) -> Dict[str, CircuitBreakerState]:
         return self._circuit_breakers
@@ -221,6 +263,23 @@ class ApprovedToolRegistry:
                     ingestion.process_normalized_signal(raw_event_id=None, signal_data=s)
                     signals_found += 1
                 summary = f"Ingested {signals_found} credit/workforce indicators from {tool.provider_name}."
+
+            elif tool_name in ("companies_house_officers_lookup", "companies_house_psc_lookup"):
+                from backend.app.services.decision_maker_discovery import DecisionMakerDiscoveryService
+                discovery = DecisionMakerDiscoveryService(db)
+                disc_res = discovery.discover_company_personnel(norm_crn, actor_user_id)
+                summary = f"Discovered {disc_res['officers_found']} officers and {disc_res['psc_found']} PSC records; mapped {disc_res['decision_makers_mapped']} decision-makers."
+
+            elif tool_name == "decision_maker_identity_verify":
+                from backend.app.services.identity_resolution import IdentityResolutionService
+                from backend.app.models.decision_maker import ProfessionalRoleProfile
+                resolver = IdentityResolutionService(db)
+                profiles = db.query(ProfessionalRoleProfile).filter(ProfessionalRoleProfile.crn == norm_crn).all()
+                verified_count = 0
+                for prof in profiles:
+                    resolver.resolve_profile_verification(prof.id, actor_user_id)
+                    verified_count += 1
+                summary = f"Corroborated {verified_count} professional profiles against statutory appointments."
 
             elapsed = time.time() - start_time
             if cb:

@@ -93,7 +93,14 @@ class ValueOfInformationEngine:
             evoi_net = round(expected_payoff_delta - tool.cost_gbp, 2)
 
             # 4. Budget & Policy Evaluation
-            if tool.cost_gbp > budget_remaining and tool.cost_gbp > 0.0:
+            from backend.app.models.score import LiquidityScoreRecord
+            score_rec = self.db.query(LiquidityScoreRecord).filter(LiquidityScoreRecord.crn == crn).order_by(LiquidityScoreRecord.scored_at.desc()).first()
+            is_company_qualified = (score_rec and score_rec.score >= 50.0) or (snapshot.charges_satisfied_90d or 0) > 0 or (snapshot.dbt_current_days or 0) >= 15.0
+
+            if tool.tool_name in ("companies_house_officers_lookup", "companies_house_psc_lookup", "decision_maker_identity_verify") and not is_company_qualified:
+                decision = "STOP"
+                rationale = "Company opportunity unverified (low strain score). Person discovery skipped to prevent unnecessary personal data processing."
+            elif tool.cost_gbp > budget_remaining and tool.cost_gbp > 0.0:
                 decision = "DEFER"
                 rationale = f"Estimated API cost (£{tool.cost_gbp:.2f}) exceeds remaining 24h budget (£{budget_remaining:.2f}). Deferred to next budget window."
             elif evoi_net > 0.0 and info_gain >= 0.15:
@@ -177,7 +184,14 @@ class ValueOfInformationEngine:
         expected_payoff_delta = p_action_change * DEFAULT_BASE_FACILITY_COMMISSION_ESTIMATE_GBP * 0.05
         evoi_net = round(expected_payoff_delta - tool.cost_gbp, 2)
 
-        if tool.cost_gbp > remaining_budget and tool.cost_gbp > 0.0:
+        from backend.app.models.score import LiquidityScoreRecord
+        score_rec = self.db.query(LiquidityScoreRecord).filter(LiquidityScoreRecord.crn == crn).order_by(LiquidityScoreRecord.scored_at.desc()).first()
+        is_company_qualified = (score_rec and score_rec.score >= 50.0) or (snapshot.charges_satisfied_90d or 0) > 0 or (snapshot.dbt_current_days or 0) >= 15.0
+
+        if tool.tool_name in ("companies_house_officers_lookup", "companies_house_psc_lookup", "decision_maker_identity_verify") and not is_company_qualified:
+            decision = "STOP"
+            rationale = "Company opportunity unverified (low strain score). Person discovery skipped to prevent unnecessary personal data processing."
+        elif tool.cost_gbp > remaining_budget and tool.cost_gbp > 0.0:
             decision = "DEFER"
             rationale = f"Estimated API cost (£{tool.cost_gbp:.2f}) exceeds remaining 24h budget (£{remaining_budget:.2f}). Deferred to next budget window."
         elif evoi_net > 0.0 and info_gain >= 0.15:
@@ -239,6 +253,27 @@ class ValueOfInformationEngine:
             if snapshot.headcount_growth_90d_pct is None:
                 return 0.30, 0.45, 0.20
             return 0.05, 0.15, 0.10
+
+        elif tool.tool_name in ("companies_house_officers_lookup", "companies_house_psc_lookup"):
+            from backend.app.models.decision_maker import CompanyOfficer
+            active_officers = self.db.query(CompanyOfficer).filter(
+                CompanyOfficer.crn == snapshot.crn,
+                CompanyOfficer.is_active == True
+            ).count()
+            if active_officers == 0:
+                return 0.45, 0.55, 0.15
+            return 0.05, 0.15, 0.10
+
+        elif tool.tool_name == "decision_maker_identity_verify":
+            from backend.app.models.decision_maker import ProfessionalRoleProfile
+            unverified_dms = self.db.query(ProfessionalRoleProfile).filter(
+                ProfessionalRoleProfile.crn == snapshot.crn,
+                ProfessionalRoleProfile.verification_status != "validated",
+                ProfessionalRoleProfile.is_finance_decision_maker == True
+            ).count()
+            if unverified_dms > 0:
+                return 0.40, 0.50, 0.15
+            return 0.05, 0.20, 0.15
 
         return 0.10, 0.30, 0.20
 

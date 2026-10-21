@@ -74,6 +74,30 @@ class CompaniesHouseAdapter(IProviderAdapter, IStreamingAdapter):
         logger.warning(f"Companies House API credentials unconfigured and DEMO_MODE=False. Cannot fetch charges for {norm_crn}.")
         return []
 
+    def fetch_company_officers(self, raw_crn: str) -> List[Dict[str, Any]]:
+        """Fetch official statutory officers (directors, secretaries, LLP members) for a company."""
+        norm_crn, valid, err = normalize_uk_crn(raw_crn)
+        if not valid or not norm_crn:
+            return []
+        if self._is_live:
+            return self._fetch_live_officers(norm_crn)
+        if settings.DEMO_MODE:
+            return self._generate_simulated_officers(norm_crn)
+        logger.warning(f"Companies House API credentials unconfigured and DEMO_MODE=False. Cannot fetch officers for {norm_crn}.")
+        return []
+
+    def fetch_company_psc(self, raw_crn: str) -> List[Dict[str, Any]]:
+        """Fetch Persons with Significant Control (PSC) register for a company."""
+        norm_crn, valid, err = normalize_uk_crn(raw_crn)
+        if not valid or not norm_crn:
+            return []
+        if self._is_live:
+            return self._fetch_live_psc(norm_crn)
+        if settings.DEMO_MODE:
+            return self._generate_simulated_psc(norm_crn)
+        logger.warning(f"Companies House API credentials unconfigured and DEMO_MODE=False. Cannot fetch PSC for {norm_crn}.")
+        return []
+
     def fetch_company_signals(self, crn: str) -> List[Dict[str, Any]]:
         """Normalises charge filings into structured signal payloads."""
         charges = self.fetch_company_charges(crn)
@@ -127,6 +151,30 @@ class CompaniesHouseAdapter(IProviderAdapter, IStreamingAdapter):
             return []
         except Exception as e:
             logger.error(f"Failed to fetch live charges for {crn}: {e}")
+            return []
+
+    def _fetch_live_officers(self, crn: str) -> List[Dict[str, Any]]:
+        url = f"{COMPANIES_HOUSE_API_URL}/company/{crn}/officers"
+        try:
+            response = httpx.get(url, auth=(self.api_key, ""), timeout=10.0)
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("items", [])
+            return []
+        except Exception as e:
+            logger.error(f"Failed to fetch live officers for {crn}: {e}")
+            return []
+
+    def _fetch_live_psc(self, crn: str) -> List[Dict[str, Any]]:
+        url = f"{COMPANIES_HOUSE_API_URL}/company/{crn}/persons-with-significant-control"
+        try:
+            response = httpx.get(url, auth=(self.api_key, ""), timeout=10.0)
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("items", [])
+            return []
+        except Exception as e:
+            logger.error(f"Failed to fetch live PSC for {crn}: {e}")
             return []
 
     def _poll_live_stream(self, timepoint: Optional[str], limit: int) -> Dict[str, Any]:
@@ -231,6 +279,78 @@ class CompaniesHouseAdapter(IProviderAdapter, IStreamingAdapter):
             })
 
         return charges
+
+    def _generate_simulated_officers(self, crn: str) -> List[Dict[str, Any]]:
+        """Deterministic officer appointments including active directors, secretaries, and historical/resigned officers."""
+        officer_names = [
+            ("Dr. Robert Sterling", "director", "Managing Director", 1974, 5),
+            ("Sarah Jenkins", "director", "Finance Director", 1982, 9),
+            ("David McAllister", "secretary", "Company Secretary", 1970, 2),
+            ("Marcus Vance", "director", "Former Operations Director", 1968, 11)
+        ]
+
+        officers = [
+            {
+                "name": officer_names[0][0],
+                "officer_role": "director",
+                "occupation": officer_names[0][2],
+                "nationality": "British",
+                "date_of_birth": {"year": officer_names[0][3], "month": officer_names[0][4]},
+                "appointed_on": "2018-03-12",
+                "resigned_on": None,
+                "links": {"officer": {"appointments": f"/officers/{hashlib.md5(officer_names[0][0].encode()).hexdigest()[:12]}/appointments"}}
+            },
+            {
+                "name": officer_names[1][0],
+                "officer_role": "director",
+                "occupation": officer_names[1][2],
+                "nationality": "British",
+                "date_of_birth": {"year": officer_names[1][3], "month": officer_names[1][4]},
+                "appointed_on": "2020-07-01",
+                "resigned_on": None,
+                "links": {"officer": {"appointments": f"/officers/{hashlib.md5(officer_names[1][0].encode()).hexdigest()[:12]}/appointments"}}
+            },
+            {
+                "name": officer_names[2][0],
+                "officer_role": "secretary",
+                "occupation": officer_names[2][2],
+                "nationality": "British",
+                "date_of_birth": {"year": officer_names[2][3], "month": officer_names[2][4]},
+                "appointed_on": "2019-01-15",
+                "resigned_on": None,
+                "links": {"officer": {"appointments": f"/officers/{hashlib.md5(officer_names[2][0].encode()).hexdigest()[:12]}/appointments"}}
+            },
+            {
+                "name": officer_names[3][0],
+                "officer_role": "director",
+                "occupation": officer_names[3][2],
+                "nationality": "British",
+                "date_of_birth": {"year": officer_names[3][3], "month": officer_names[3][4]},
+                "appointed_on": "2015-06-01",
+                "resigned_on": "2024-04-15",
+                "links": {"officer": {"appointments": f"/officers/{hashlib.md5(officer_names[3][0].encode()).hexdigest()[:12]}/appointments"}}
+            }
+        ]
+        return officers
+
+    def _generate_simulated_psc(self, crn: str) -> List[Dict[str, Any]]:
+        """Deterministic Persons with Significant Control (PSC) entries."""
+        return [
+            {
+                "name": "Dr. Robert Sterling",
+                "kind": "individual-person-with-significant-control",
+                "notified_on": "2018-03-12",
+                "ceased_on": None,
+                "nationality": "British",
+                "date_of_birth": {"year": 1974, "month": 5},
+                "natures_of_control": [
+                    "ownership-of-shares-50-to-75-percent",
+                    "voting-rights-50-to-75-percent",
+                    "right-to-appoint-and-remove-directors"
+                ],
+                "links": {"self": f"/company/{crn}/persons-with-significant-control/psc-01"}
+            }
+        ]
 
     def _poll_simulated_stream(self, timepoint: Optional[str], limit: int) -> Dict[str, Any]:
         """Provides simulated monotonic stream events for testing durable checkpoint recovery."""
