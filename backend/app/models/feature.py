@@ -34,8 +34,10 @@ class CompanyFeatureSnapshot(Base):
     # Pillar 2: Commercial Credit & Payment Risk (DBT strictly separated from DSO)
     dbt_current_days = Column(Float, nullable=True)  # Days Beyond Terms
     dbt_trend_90d = Column(Float, nullable=True)     # Change in DBT
+    dbt_data_available = Column(Integer, default=0)
     credit_score_current = Column(Float, nullable=True)
     credit_score_drop_90d = Column(Float, nullable=True)
+    credit_score_data_available = Column(Integer, default=0)
     adverse_insolvency_events_count = Column(Integer, default=0)
     
     # DSO (Only populated when genuine receivables observation exists)
@@ -51,6 +53,7 @@ class CompanyFeatureSnapshot(Base):
     headcount_acceleration_pct = Column(Float, nullable=True)
     headcount_observation_count = Column(Integer, default=0)
     headcount_confidence_score = Column(Float, default=0.0)
+    workforce_data_available = Column(Integer, default=0)
 
     # Pillar 4: Corroboration & Quality
     corroboration_signal_count = Column(Integer, default=0)

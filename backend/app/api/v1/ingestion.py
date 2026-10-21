@@ -1,6 +1,6 @@
 import json
 from datetime import datetime, timezone
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Header, Request, status
 from sqlalchemy.orm import Session
 
@@ -18,6 +18,7 @@ router = APIRouter(prefix="/ingest", tags=["Signal Ingestion & Webhooks"])
 async def creditsafe_webhook_receiver(
     request: Request,
     x_creditsafe_signature: str = Header(None, alias="X-Creditsafe-Signature"),
+    x_creditsafe_timestamp: Optional[str] = Header(None, alias="X-Creditsafe-Timestamp"),
     db: Session = Depends(get_db)
 ):
     """
@@ -29,11 +30,11 @@ async def creditsafe_webhook_receiver(
     adapter = provider_registry.creditsafe
 
     # Verify signature if secret configured
-    if settings.CREDITSAFE_WEBHOOK_SECRET and not adapter.verify_webhook(body_bytes, x_creditsafe_signature):
-        logger.warning("Rejected Creditsafe webhook: Invalid HMAC signature")
+    if settings.CREDITSAFE_WEBHOOK_SECRET and not adapter.verify_webhook(body_bytes, x_creditsafe_signature, timestamp_header=x_creditsafe_timestamp):
+        logger.warning("Rejected Creditsafe webhook: Invalid HMAC signature or timestamp replay")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing webhook signature"
+            detail="Invalid or missing webhook signature or timestamp drift"
         )
 
     try:
@@ -126,6 +127,20 @@ def trigger_companies_house_stream_sync(
         "events_received": len(events),
         "events_processed": processed_count
     }
+
+@router.post("/dead-letter-queue/{dlq_id}/replay")
+def replay_dead_letter_queue_event(
+    dlq_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Attempts to replay and reprocess a quarantined Dead Letter Queue event.
+    """
+    ingestion_service = IngestionService(db)
+    success, message = ingestion_service.replay_dead_letter_event(dlq_id)
+    if not success:
+        raise HTTPException(status_code=400, detail=message)
+    return {"status": "replayed", "message": message, "dead_letter_id": dlq_id}
 
 @router.get("/dead-letter-queue")
 def list_dead_letter_events(limit: int = 50, db: Session = Depends(get_db)):

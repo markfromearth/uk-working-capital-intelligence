@@ -29,22 +29,24 @@ def test_point_in_time_historical_isolation(db_session):
     t_past = datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
     t_future = datetime(2026, 9, 1, 12, 0, 0, tzinfo=timezone.utc)
 
-    # Signal 1: Occurred before t_past
+    # Signal 1: Occurred and ingested before t_past
     sig1 = NormalizedSignal(
         crn=crn,
         signal_type="dbt_increase",
         source_provider="creditsafe",
         observation_timestamp=datetime(2026, 5, 15, 12, 0, 0, tzinfo=timezone.utc),
+        ingestion_timestamp=datetime(2026, 5, 15, 12, 5, 0, tzinfo=timezone.utc),
         value_numeric=15.0,
         value_text="DBT is 15 days",
         direction="strain_increasing"
     )
-    # Signal 2: Occurred AFTER t_past (in July 2026)
+    # Signal 2: Occurred and ingested AFTER t_past (in July 2026)
     sig2 = NormalizedSignal(
         crn=crn,
         signal_type="charge_satisfaction_mr04",
         source_provider="companies_house",
         observation_timestamp=datetime(2026, 7, 10, 12, 0, 0, tzinfo=timezone.utc),
+        ingestion_timestamp=datetime(2026, 7, 10, 12, 5, 0, tzinfo=timezone.utc),
         value_numeric=1.0,
         value_text="Charge satisfied MR04",
         direction="strain_increasing"

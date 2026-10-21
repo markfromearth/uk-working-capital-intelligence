@@ -160,6 +160,43 @@ class IngestionService:
         logger.error(f"Event routed to Dead Letter Queue [ID={dle.id}]: {error_msg}")
         return dle
 
+    def replay_dead_letter_event(self, dead_letter_id: int) -> Tuple[bool, str]:
+        """
+        Attempts to replay a quarantined dead-letter event.
+        If reprocessing succeeds, marks resolved_at and updates the associated raw event.
+        """
+        dle = self.db.query(DeadLetterEvent).filter(DeadLetterEvent.id == dead_letter_id).first()
+        if not dle:
+            return False, f"Dead letter event {dead_letter_id} not found"
+
+        if dle.resolved_at:
+            return True, f"Event {dead_letter_id} already successfully resolved"
+
+        try:
+            payload = json.loads(dle.raw_payload)
+        except Exception as e:
+            dle.retry_count += 1
+            self.db.commit()
+            return False, f"Cannot replay: Payload is malformed JSON ({e})"
+
+        # Attempt to re-extract and process signal
+        try:
+            signal = self.process_normalized_signal(dle.raw_event_id, payload)
+            if signal:
+                dle.resolved_at = datetime.now(timezone.utc)
+                self.db.commit()
+                logger.info(f"Successfully replayed and resolved Dead Letter Event [ID={dle.id}]")
+                return True, f"Successfully reprocessed signal {signal.signal_id}"
+            else:
+                dle.retry_count += 1
+                self.db.commit()
+                return False, "Signal could not be processed during replay"
+        except Exception as exc:
+            dle.retry_count += 1
+            dle.error_message = f"Replay attempt failed: {exc}"
+            self.db.commit()
+            return False, str(exc)
+
     # --- Durable Stream Checkpoint Management ---
 
     def get_checkpoint(self, stream_name: str) -> Optional[str]:

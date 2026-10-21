@@ -79,6 +79,11 @@ async def correlation_id_middleware(request: Request, call_next):
     process_time = (time.time() - start_time) * 1000.0
     response.headers["X-Correlation-ID"] = cid
     response.headers["X-Process-Time-Ms"] = f"{process_time:.2f}"
+    # Security headers
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = "default-src 'self' https: 'unsafe-inline'; frame-ancestors 'none';"
     return response
 
 # Include API Routers

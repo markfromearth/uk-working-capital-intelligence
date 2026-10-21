@@ -23,7 +23,7 @@ class User(Base):
     last_login_at = Column(DateTime, nullable=True)
 
 class AuditLog(Base):
-    """Immutable audit trail for compliance, entity-resolution overrides, and prospect reviews."""
+    """Tamper-evident audit trail with cryptographic hash chaining for compliance."""
     __tablename__ = "audit_logs"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -35,4 +35,6 @@ class AuditLog(Base):
     resource_id = Column(String(255), nullable=False)
     details_json = Column(Text, nullable=True)
     ip_address = Column(String(45), nullable=True)
+    prev_hash = Column(String(64), nullable=True)            # SHA-256 of preceding audit record
+    record_hash = Column(String(64), nullable=True)          # SHA-256 of current record contents + prev_hash
     created_at = Column(DateTime, default=utcnow, index=True)

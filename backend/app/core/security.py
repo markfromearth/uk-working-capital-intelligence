@@ -7,35 +7,59 @@ from typing import Any, Dict, Optional, Union
 import jwt
 from backend.app.config import settings
 
+PBKDF2_ITERATIONS = 210_000
+
 def hash_password(password: str) -> str:
-    """Hash a password using PBKDF2 with SHA-256 and a cryptographically secure salt."""
+    """
+    Hash a password using PBKDF2-HMAC-SHA256 with 210,000 iterations
+    and a cryptographically secure 128-bit salt.
+    """
     salt = secrets.token_hex(16)
     key = hashlib.pbkdf2_hmac(
         'sha256',
         password.encode('utf-8'),
         salt.encode('utf-8'),
-        100_000
+        PBKDF2_ITERATIONS
     )
-    return f"{salt}:{key.hex()}"
+    return f"pbkdf2_sha256${PBKDF2_ITERATIONS}${salt}${key.hex()}"
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a plain password against a stored PBKDF2 salt:key hash."""
-    if not hashed_password or ":" not in hashed_password:
+    """
+    Verify a plain password against a stored PBKDF2 hash.
+    Supports both standard modular format and legacy salt:key format.
+    """
+    if not hashed_password:
         return False
     try:
-        salt, key_hex = hashed_password.split(":", 1)
-        key = hashlib.pbkdf2_hmac(
-            'sha256',
-            plain_password.encode('utf-8'),
-            salt.encode('utf-8'),
-            100_000
-        )
-        return hmac.compare_digest(key.hex(), key_hex)
+        if hashed_password.startswith("pbkdf2_sha256$"):
+            parts = hashed_password.split("$")
+            if len(parts) != 4:
+                return False
+            _, iters_str, salt, key_hex = parts
+            iters = int(iters_str)
+            key = hashlib.pbkdf2_hmac(
+                'sha256',
+                plain_password.encode('utf-8'),
+                salt.encode('utf-8'),
+                iters
+            )
+            return hmac.compare_digest(key.hex(), key_hex)
+        elif ":" in hashed_password:
+            # Legacy format (100,000 iterations)
+            salt, key_hex = hashed_password.split(":", 1)
+            key = hashlib.pbkdf2_hmac(
+                'sha256',
+                plain_password.encode('utf-8'),
+                salt.encode('utf-8'),
+                100_000
+            )
+            return hmac.compare_digest(key.hex(), key_hex)
+        return False
     except Exception:
         return False
 
 def create_access_token(subject: Union[str, Any], role: str, expires_delta: Optional[timedelta] = None) -> str:
-    """Creates a signed JWT access token."""
+    """Creates a signed JWT access token with role claims."""
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:

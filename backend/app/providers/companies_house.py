@@ -128,6 +128,10 @@ class CompaniesHouseAdapter(IProviderAdapter, IStreamingAdapter):
         try:
             # Note: Streaming endpoint in live mode provides newline-delimited JSON
             with httpx.stream("GET", url, auth=(self.api_key, ""), params=params, timeout=30.0) as stream:
+                if stream.status_code == 416:
+                    logger.warning(f"Companies House streaming cursor {timepoint} expired (HTTP 416). Resetting cursor to stream head.")
+                    return {"events": [], "next_timepoint": None, "has_more": False, "error": "cursor_expired_reset"}
+
                 events = []
                 last_tp = timepoint
                 for line in stream.iter_lines():
@@ -138,6 +142,12 @@ class CompaniesHouseAdapter(IProviderAdapter, IStreamingAdapter):
                         if len(events) >= limit:
                             break
                 return {"events": events, "next_timepoint": last_tp, "has_more": len(events) >= limit}
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 416:
+                logger.warning(f"Companies House stream cursor {timepoint} out of range (HTTP 416). Resetting.")
+                return {"events": [], "next_timepoint": None, "has_more": False, "error": "cursor_expired_reset"}
+            logger.error(f"Companies House streaming HTTP error: {e}")
+            return {"events": [], "next_timepoint": timepoint, "has_more": False, "error": str(e)}
         except Exception as e:
             logger.error(f"Error reading Companies House charge stream: {e}")
             return {"events": [], "next_timepoint": timepoint, "has_more": False, "error": str(e)}

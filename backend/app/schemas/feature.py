@@ -20,14 +20,16 @@ class CompanyFeatureSnapshotOut(BaseModel):
     # Pillar 2: Credit & Payment Risk (DBT vs DSO explicitly segregated)
     dbt_current_days: Optional[float] = None
     dbt_trend_90d: Optional[float] = None
+    dbt_data_available: int = 0
     credit_score_current: Optional[float] = None
     credit_score_drop_90d: Optional[float] = None
+    credit_score_data_available: int = 0
     adverse_insolvency_events_count: int
     
     # DSO (Strictly separated from DBT)
     dso_current_days: Optional[float] = None
     dso_trend_90d: Optional[float] = None
-    dso_data_available: int
+    dso_data_available: int = 0
 
     # Pillar 3: Workforce Dynamics
     headcount_current: Optional[int] = None
@@ -37,6 +39,7 @@ class CompanyFeatureSnapshotOut(BaseModel):
     headcount_acceleration_pct: Optional[float] = None
     headcount_observation_count: int
     headcount_confidence_score: float
+    workforce_data_available: int = 0
 
     # Pillar 4: Corroboration & Quality
     corroboration_signal_count: int

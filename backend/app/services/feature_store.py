@@ -10,7 +10,10 @@ from backend.app.models.feature import CompanyFeatureSnapshot
 class FeatureStoreService:
     """
     Computes Point-in-Time correct feature snapshots for UK companies.
-    Guarantees no future leakage: only signals where observation_timestamp <= as_of_timestamp are used.
+    Guarantees strict bi-temporal isolation:
+      1. observation_timestamp <= as_of_timestamp (event occurred before cutoff)
+      2. ingestion_timestamp <= as_of_timestamp (event was known/received by platform before cutoff)
+      3. Excludes disputed, superseded, or withdrawn records.
     """
 
     def __init__(self, db: Session):
@@ -26,10 +29,14 @@ class FeatureStoreService:
         elif as_of_timestamp.tzinfo is None:
             as_of_timestamp = as_of_timestamp.replace(tzinfo=timezone.utc)
 
-        # Retrieve strictly past/present signals for this company relative to as_of_timestamp
+        # Bi-temporal point-in-time query:
+        # Both event observation time AND system ingestion time must precede the as-of cutoff.
+        # Excludes disputed or superseded events.
         signals: List[NormalizedSignal] = self.db.query(NormalizedSignal).filter(
             NormalizedSignal.crn == crn,
-            NormalizedSignal.observation_timestamp <= as_of_timestamp
+            NormalizedSignal.observation_timestamp <= as_of_timestamp,
+            (NormalizedSignal.ingestion_timestamp <= as_of_timestamp) | (NormalizedSignal.ingestion_timestamp.is_(None)),
+            NormalizedSignal.verification_status.notin_(["disputed", "superseded"])
         ).order_by(NormalizedSignal.observation_timestamp.desc()).all()
 
         # Window thresholds
@@ -67,19 +74,26 @@ class FeatureStoreService:
         hc_obs_count = 0
         hc_confidence = 0.0
 
-        # 4. Corroboration & Metadata
-        distinct_sources = set()
+        # 4. Corroboration & Quality (Strain-Specific)
+        distinct_strain_sources = set()
         strain_signals = []
         contradictory_flags = []
+        seen_event_keys = set()
 
         for sig in signals:
             obs = sig.observation_timestamp
             if obs.tzinfo is None:
                 obs = obs.replace(tzinfo=timezone.utc)
-            
-            distinct_sources.add(sig.source_provider)
+
+            # Deduplication: logically duplicated signals from one underlying event
+            event_key = (sig.signal_type, sig.original_event_ref or sig.signal_id)
+            if event_key in seen_event_keys:
+                continue
+            seen_event_keys.add(event_key)
+
             if sig.direction == "strain_increasing":
                 strain_signals.append(sig)
+                distinct_strain_sources.add(sig.source_provider)
             elif sig.direction == "strain_decreasing":
                 contradictory_flags.append(f"{sig.signal_type}: {sig.value_text}")
 
@@ -88,7 +102,6 @@ class FeatureStoreService:
                 age_days = (as_of_timestamp - obs).total_seconds() / 86400.0
                 if latest_sat_age_days is None or age_days < latest_sat_age_days:
                     latest_sat_age_days = age_days
-                    # determine scope
                     if sig.metadata_json:
                         try:
                             meta = json.loads(sig.metadata_json)
@@ -163,7 +176,7 @@ class FeatureStoreService:
 
         # Determine evidence coverage category
         corroboration_count = len(strain_signals)
-        source_count = len(distinct_sources)
+        source_count = len(distinct_strain_sources)
         if source_count >= 3 and corroboration_count >= 3:
             coverage = "strong"
         elif source_count >= 2 and corroboration_count >= 2:
@@ -172,6 +185,11 @@ class FeatureStoreService:
             coverage = "emerging"
         else:
             coverage = "limited"
+
+        # Explicit observation availability indicators (absence of evidence != evidence of absence)
+        dbt_data_avail = 1 if dbt_current is not None else 0
+        credit_data_avail = 1 if (credit_score_current is not None or credit_score_drop_90d is not None) else 0
+        workforce_data_avail = 1 if headcount_current is not None else 0
 
         snapshot = CompanyFeatureSnapshot(
             crn=crn,
@@ -185,8 +203,10 @@ class FeatureStoreService:
             charge_evidence_strength=round(charge_strength, 2),
             dbt_current_days=round(dbt_current, 1) if dbt_current is not None else None,
             dbt_trend_90d=round(dbt_trend_90d, 1) if dbt_trend_90d is not None else None,
+            dbt_data_available=dbt_data_avail,
             credit_score_current=round(credit_score_current, 1) if credit_score_current is not None else None,
             credit_score_drop_90d=round(credit_score_drop_90d, 1) if credit_score_drop_90d is not None else None,
+            credit_score_data_available=credit_data_avail,
             adverse_insolvency_events_count=adverse_count,
             dso_current_days=round(dso_current, 1) if dso_current is not None else None,
             dso_trend_90d=round(dso_trend_90d, 1) if dso_trend_90d is not None else None,
@@ -198,6 +218,7 @@ class FeatureStoreService:
             headcount_acceleration_pct=round(acceleration_pct, 1) if acceleration_pct is not None else None,
             headcount_observation_count=hc_obs_count,
             headcount_confidence_score=round(hc_confidence, 2),
+            workforce_data_available=workforce_data_avail,
             corroboration_signal_count=corroboration_count,
             distinct_source_count=source_count,
             evidence_coverage=coverage,

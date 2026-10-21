@@ -8,6 +8,9 @@ class AdapterHealthStatus(str, Enum):
     LIVE = "live"
     SIMULATED = "simulated"
     UNCONFIGURED = "unconfigured"
+    STALE = "stale"
+    DEGRADED = "degraded"
+    FAILED = "failed"
     ERROR = "error"
 
 class ProviderStatus(BaseModel):

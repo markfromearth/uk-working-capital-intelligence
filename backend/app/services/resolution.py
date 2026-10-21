@@ -59,12 +59,15 @@ class EntityResolutionService:
             (CompanyRegistry or None, match_confidence_score, resolution_method, review_id_if_queued)
         """
         # Stage 1: Exact match on valid UK CRN
+        input_norm_crn = None
         if raw_identifier and is_valid_uk_crn(raw_identifier):
-            norm_crn, _, _ = normalize_uk_crn(raw_identifier)
-            company = self.db.query(CompanyRegistry).filter(CompanyRegistry.crn == norm_crn).first()
-            if company:
-                logger.info(f"Resolved company via Stage 1 (Exact CRN): {norm_crn}")
-                return company, 1.0, "exact_crn", None
+            norm_crn, valid, _ = normalize_uk_crn(raw_identifier)
+            if valid and norm_crn:
+                input_norm_crn = norm_crn
+                company = self.db.query(CompanyRegistry).filter(CompanyRegistry.crn == norm_crn).first()
+                if company:
+                    logger.info(f"Resolved company via Stage 1 (Exact CRN): {norm_crn}")
+                    return company, 1.0, "exact_crn", None
 
         if not company_name:
             return None, 0.0, "unresolved_no_name", None
@@ -82,6 +85,11 @@ class EntityResolutionService:
         best_method = "unresolved"
 
         for cand in candidates:
+            # CRITICAL SAFETY RULE: Never match or merge if input has a valid CRN that conflicts with candidate CRN
+            if input_norm_crn and cand.crn != input_norm_crn:
+                # Conflicting canonical identities cannot be merged
+                continue
+
             cand_clean_name = clean_company_name(cand.company_name)
             
             # SequenceMatcher ratio between normalized company names
@@ -145,6 +153,24 @@ class EntityResolutionService:
         review.status = "approved" if approved else "rejected"
         review.reviewed_by = reviewer_name
         review.reviewer_notes = notes
+        review.reviewed_at = datetime.now(timezone.utc)
+        self.db.commit()
+        self.db.refresh(review)
+        return review
+
+    def unmerge_or_split_entity(
+        self,
+        review_id: int,
+        reviewer_name: str,
+        reason: str
+    ) -> Optional[CompanyMatchReview]:
+        """Reverses an approved match decision, records the unmerge correction and preserves provenance."""
+        review = self.db.query(CompanyMatchReview).filter(CompanyMatchReview.id == review_id).first()
+        if not review:
+            return None
+        review.status = "rejected"
+        review.reviewed_by = reviewer_name
+        review.reviewer_notes = f"UNMERGE_REVERSAL: {reason}"
         review.reviewed_at = datetime.now(timezone.utc)
         self.db.commit()
         self.db.refresh(review)

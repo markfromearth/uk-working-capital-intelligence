@@ -10,8 +10,20 @@ from backend.app.models.signal import RawEvent, NormalizedSignal, DeadLetterEven
 from backend.app.models.score import LiquidityScoreRecord
 from backend.app.providers.registry import provider_registry
 from backend.app.services.seed_data import seed_demonstration_data
+from backend.app.services.audit import verify_audit_log_chain
 
 router = APIRouter(prefix="/system", tags=["System & Health"])
+
+@router.get("/audit-verification")
+def audit_verification(db: Session = Depends(get_db)):
+    """Verifies cryptographic hash chain of the immutable audit trail."""
+    is_valid, count, err = verify_audit_log_chain(db)
+    return {
+        "chain_valid": is_valid,
+        "records_verified": count,
+        "error": err,
+        "tamper_detected": not is_valid
+    }
 
 @router.get("/health")
 def health_check(db: Session = Depends(get_db)):

@@ -13,6 +13,8 @@ from backend.app.models.user import AuditLog
 from backend.app.schemas.review import ReviewActionCreate, ReviewActionOut
 from backend.app.schemas.company import CompanyMatchReviewOut, MatchReviewDecision
 
+from backend.app.services.audit import log_audit_event
+
 router = APIRouter(prefix="/reviews", tags=["Broker Review & Resolution Workflow"])
 
 @router.post("/prospects/{crn}", response_model=ReviewActionOut)
@@ -59,23 +61,22 @@ def record_prospect_review_action(
         updated_at=now
     )
     db.add(review_action)
+    db.commit()
+    db.refresh(review_action)
     
-    # Audit log entry
-    audit = AuditLog(
+    # Tamper-evident Audit log entry with hash chaining
+    log_audit_event(
+        db=db,
         action=f"broker_review_{action_in.review_status}",
         resource_type="prospect",
         resource_id=norm_crn,
-        details_json=json.dumps({
+        details={
             "status": action_in.review_status,
             "broker": action_in.assigned_broker_name,
             "disputed_signal": action_in.signal_id_disputed,
             "outcome": action_in.outcome
-        }),
-        created_at=now
+        }
     )
-    db.add(audit)
-    db.commit()
-    db.refresh(review_action)
     return review_action
 
 @router.get("/prospects/{crn}/history", response_model=List[ReviewActionOut])
@@ -106,15 +107,12 @@ def decide_entity_match(
     review.reviewer_notes = decision.reviewer_notes
     review.reviewed_at = now
     
-    # Audit log entry
-    audit = AuditLog(
+    # Tamper-evident Audit log entry with hash chaining
+    log_audit_event(
+        db=db,
         action=f"entity_match_{decision.status}",
         resource_type="company_match",
         resource_id=str(match_id),
-        details_json=json.dumps({"source_identifier": review.source_identifier, "candidate_crn": review.candidate_crn}),
-        created_at=now
+        details={"source_identifier": review.source_identifier, "candidate_crn": review.candidate_crn}
     )
-    db.add(audit)
-    db.commit()
-    db.refresh(review)
     return review

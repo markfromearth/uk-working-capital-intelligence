@@ -57,11 +57,34 @@ class CreditsafeAdapter(IProviderAdapter):
             return self._fetch_live_report(norm_crn)
         return self._generate_simulated_signals(norm_crn)
 
-    def verify_webhook(self, raw_body: bytes, signature_header: Optional[str]) -> bool:
-        """Verifies authenticated provider webhook signature."""
+    def verify_webhook(
+        self,
+        raw_body: bytes,
+        signature_header: Optional[str],
+        timestamp_header: Optional[str] = None,
+        max_drift_seconds: int = 300
+    ) -> bool:
+        """
+        Verifies authenticated provider webhook signature with optional timestamp replay protection.
+        """
         if not self.webhook_secret:
-            # If no secret configured in test/demo mode, reject unless demo mode allows explicitly
             return False
+
+        # If timestamp header supplied, verify it is within permissible drift window
+        if timestamp_header:
+            try:
+                if timestamp_header.isdigit():
+                    ts = datetime.fromtimestamp(float(timestamp_header), tz=timezone.utc)
+                else:
+                    ts = datetime.fromisoformat(timestamp_header.replace("Z", "+00:00"))
+                drift = abs((datetime.now(timezone.utc) - ts).total_seconds())
+                if drift > max_drift_seconds:
+                    logger.warning(f"Rejected webhook: Timestamp drift of {drift:.1f}s exceeds limit of {max_drift_seconds}s")
+                    return False
+            except Exception as e:
+                logger.warning(f"Rejected webhook: Unparseable timestamp header '{timestamp_header}': {e}")
+                return False
+
         return verify_webhook_signature(raw_body, signature_header, self.webhook_secret)
 
     def parse_webhook_payload(self, payload: Dict[str, Any]) -> List[Dict[str, Any]]:

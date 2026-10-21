@@ -175,12 +175,34 @@ Respond with a valid JSON object matching this schema:
         return None
 
     def _validate_grounding(self, explanation: LLMExplanationContract, evidence_package: Dict[str, Any]) -> bool:
-        """Verifies that all signal citations in the explanation correspond to real stored signals."""
+        """
+        Verifies that:
+        1. Target company CRN matches the requested entity strictly.
+        2. All cited signal IDs exist in the company's verified stored signals.
+        3. No invented currency figures appear in the generated narrative that are not backed by evidence.
+        """
+        expected_crn = evidence_package.get("company", {}).get("crn")
+        if expected_crn and explanation.company_crn != expected_crn:
+            logger.warning(f"Grounding violation: CRN mismatch (expected {expected_crn}, got {explanation.company_crn})")
+            return False
+
         valid_signal_ids = {s["signal_id"] for s in evidence_package.get("signals", [])}
         for sig in explanation.primary_signals + explanation.corroborating_signals:
             if sig.signal_id and sig.signal_id not in valid_signal_ids:
                 logger.warning(f"Grounding violation: LLM cited unknown signal_id '{sig.signal_id}'")
                 return False
+
+        # Check for ungrounded currency / monetary amounts in reasoning_summary
+        currency_claims = re.findall(r"[£$€]\s*[\d,]+(?:\.\d+)?(?:\s*(?:k|m|b|million|billion|thousand))?", explanation.reasoning_summary, re.IGNORECASE)
+        if currency_claims:
+            evidence_text = json.dumps(evidence_package)
+            for claim in currency_claims:
+                # Clean delimiters
+                val = re.sub(r"[^\d]", "", claim)
+                if val and val not in evidence_text:
+                    logger.warning(f"Grounding violation: LLM invented unevidenced monetary figure '{claim}' in narrative")
+                    return False
+
         return True
 
     def _generate_deterministic_explanation(
