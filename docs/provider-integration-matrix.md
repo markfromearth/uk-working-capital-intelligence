@@ -8,7 +8,7 @@ This document defines the interface specifications, operational boundaries, rate
 
 | Provider | Ingestion Channel | Auth Method | Rate Limits & Quotas | Boundary Status | Fixture / Live Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Companies House REST API** | HTTPS REST (`GET /company/{crn}/charges`, `GET /company/{crn}/filing-history`) | HTTP Basic (`API_KEY:` as base64) | 600 requests per 5-minute sliding window | Implemented & Verified | Live-ready (Key configurable in `COMPANIES_HOUSE_API_KEY`) |
+| **Companies House REST API** | HTTPS REST (`GET /company/{crn}/charges`, `GET /company/{crn}/filing-history`) | HTTP Basic (`API_KEY:` as base64) | 600 requests per 5-minute sliding window | Implemented & Live Verified | **LIVE ACTIVE** (Authenticated & verified against official API) |
 | **Companies House Streaming API** | Long-polling HTTP chunked stream (`/charges-stream`) | HTTP Basic (`API_KEY:` as base64) | 1 concurrent connection per API key | Implemented with resilient recovery & 416 fallback | Resilient cursor simulation verified (`test_companies_house_stream_resilience.py`) |
 | **Creditsafe Business API** | HTTPS REST / Webhook (`POST /v1/companies`, Webhook push) | OAuth2 Bearer / Webhook HMAC SHA-256 (`X-Creditsafe-Signature`) | 100 req/sec commercial tier | Implemented & Verified | Deterministic Fixtures & Webhook replay protection verified |
 | **Experian Commercial API** | HTTPS SOAP/REST (`POST /v2/credit-risk/commercial`) | OAuth2 Client Credentials / Mututal TLS (mTLS) | Account-dependent SLA | Implemented behind adapter abstraction | Deterministic Fixtures |
