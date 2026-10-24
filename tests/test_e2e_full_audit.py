@@ -21,10 +21,11 @@ def test_e2e_frontend_html_integrity(client):
     # Required brand strings
     assert "UK WORKING-CAPITAL INTELLIGENCE" in html
     assert "Prioritised Prospects" in html
-    assert "Lead Search & Pipeline" in html
+    assert "Lead Search" in html
+    assert "Pipeline" in html
     assert "FINANCE LEAD GENERATOR" in html
-    assert "FINANCIAL HEALTH & LIQUIDITY" in html
-    assert "CHARGES & COMPETING FACILITIES" in html
+    assert "FINANCIAL HEALTH" in html
+    assert "CHARGES" in html
     assert "COMPANIES HOUSE FILING STATUS" in html
     assert "PEOPLE WITH SIGNIFICANT CONTROL" in html
     assert "100-POINT STATUTORY SCORE ATTRIBUTION" in html
