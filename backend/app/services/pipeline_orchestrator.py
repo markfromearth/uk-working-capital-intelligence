@@ -126,24 +126,24 @@ class WardenPipelineOrchestrator:
                             excerpt=f"Extracted net current assets: £{balance_sheet.net_current_assets:,.0f} ({balance_sheet.accounting_framework})",
                         )
 
-        # If document parsing was unavailable, provide conservative structural estimate
+        # If statutory accounts document was unobserved or unavailable from CH
         if not balance_sheet:
             balance_sheet = BalanceSheetData(
-                extraction_path="SIMULATED_STRUCTURAL",
-                accounting_framework="FRS_105",
-                current_assets_total=350000.0,
+                extraction_path="UNOBSERVED_CH_ACCOUNTS",
+                accounting_framework="UNOBSERVED",
+                current_assets_total=0.0,
                 debtors=None,
                 cash_at_bank=None,
-                creditors_due_within_one_year=180000.0,
-                net_current_assets=170000.0,
+                creditors_due_within_one_year=0.0,
+                net_current_assets=0.0,
                 is_arithmetic_valid=True,
                 primary_source=PrimarySourceReference(
                     source_type="ACCOUNTS_DOCUMENT",
-                    source_id=f"ESTIMATED_ACCOUNTS_{norm_crn}",
-                    title="Estimated Accounts Snapshot (Conservative FRS 105)",
+                    source_id=f"UNOBSERVED_{norm_crn}",
+                    title="Accounts Balance Sheet (Unobserved on Companies House)",
                     uri=f"https://find-and-update.company-information.service.gov.uk/company/{norm_crn}/filing-history",
                     retrieval_method="REST_API",
-                    excerpt="Estimated balance sheet based on sector working-capital ratios.",
+                    excerpt="Accounts filing not observed or pending digitisation on Companies House.",
                 ),
             )
 
@@ -175,8 +175,11 @@ class WardenPipelineOrchestrator:
         }
 
     def get_prospects(self) -> List[TrappedCashDossier]:
-        """Return all surfaced qualified prospects sorted by indicative facility size."""
-        prospects = list(self._dossier_store.values())
+        """Return only genuine businesses that have presented active indicators from Companies House."""
+        prospects = [
+            d for d in self._dossier_store.values()
+            if d.provisional_score > 0 and len(d.primary_sources) > 0
+        ]
         return sorted(prospects, key=lambda d: d.indicative_facility_80pct, reverse=True)
 
     def get_dossier(self, crn: str) -> Optional[TrappedCashDossier]:

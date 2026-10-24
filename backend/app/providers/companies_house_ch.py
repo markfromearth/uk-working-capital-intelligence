@@ -1,7 +1,8 @@
 """
 Companies House API Provider for CH-Only Invoice Finance Warden.
 Implements token-bucket rate limiting, canonical CRN normalization,
-resilient HTTP client calls, and deterministic simulation fallbacks.
+and resilient live HTTP client calls.
+No simulated data fallbacks: queries genuine Companies House public data exclusively.
 """
 
 import asyncio
@@ -46,32 +47,33 @@ class AsyncTokenBucket:
 
 
 class CompaniesHouseCHClient:
-    """Production Companies House REST & Document Client."""
+    """Production Companies House REST & Document Client (Genuine Data Only)."""
 
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or settings.COMPANIES_HOUSE_API_KEY
         self._is_live = bool(self.api_key and self.api_key.strip() and self.api_key != "mock_key")
         self.rate_limiter = AsyncTokenBucket()
-        self._simulated_store: Dict[str, Dict[str, Any]] = {}
+        self._test_fixtures: Dict[str, Dict[str, Any]] = {}
 
     def register_fixture(self, crn: str, data: Dict[str, Any]):
-        """Register custom test fixture data for a CRN."""
+        """Register explicit test fixture data for a CRN during isolated testing."""
         norm_crn, valid, _ = normalize_uk_crn(crn)
         if valid and norm_crn:
-            self._simulated_store[norm_crn] = data
+            self._test_fixtures[norm_crn] = data
 
     async def fetch_profile(self, crn: str) -> Optional[Dict[str, Any]]:
-        """Fetch canonical company profile."""
+        """Fetch canonical company profile directly from Companies House."""
         norm_crn, valid, err = normalize_uk_crn(crn)
         if not valid or not norm_crn:
             logger.warning(f"Invalid CRN for CH lookup: {crn} - {err}")
             return None
 
-        if norm_crn in self._simulated_store:
-            return self._simulated_store[norm_crn].get("profile")
+        if norm_crn in self._test_fixtures:
+            return self._test_fixtures[norm_crn].get("profile")
 
         if not self._is_live:
-            return self._generate_simulated_profile(norm_crn)
+            logger.warning(f"Companies House live credentials unconfigured. Cannot fetch profile for {norm_crn}.")
+            return None
 
         await self.rate_limiter.acquire()
         url = f"{COMPANIES_HOUSE_REST_BASE}/company/{norm_crn}"
@@ -87,16 +89,16 @@ class CompaniesHouseCHClient:
             return None
 
     async def fetch_charges(self, crn: str) -> List[Dict[str, Any]]:
-        """Fetch mortgage and charge records."""
+        """Fetch mortgage and charge records directly from Companies House."""
         norm_crn, valid, _ = normalize_uk_crn(crn)
         if not valid or not norm_crn:
             return []
 
-        if norm_crn in self._simulated_store:
-            return self._simulated_store[norm_crn].get("charges", [])
+        if norm_crn in self._test_fixtures:
+            return self._test_fixtures[norm_crn].get("charges", [])
 
         if not self._is_live:
-            return self._generate_simulated_charges(norm_crn)
+            return []
 
         await self.rate_limiter.acquire()
         url = f"{COMPANIES_HOUSE_REST_BASE}/company/{norm_crn}/charges"
@@ -110,16 +112,16 @@ class CompaniesHouseCHClient:
             return []
 
     async def fetch_filing_history(self, crn: str, category: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Fetch filing history (accounts, officers, gazette)."""
+        """Fetch filing history directly from Companies House."""
         norm_crn, valid, _ = normalize_uk_crn(crn)
         if not valid or not norm_crn:
             return []
 
-        if norm_crn in self._simulated_store:
-            return self._simulated_store[norm_crn].get("filing_history", [])
+        if norm_crn in self._test_fixtures:
+            return self._test_fixtures[norm_crn].get("filing_history", [])
 
         if not self._is_live:
-            return self._generate_simulated_filings(norm_crn)
+            return []
 
         await self.rate_limiter.acquire()
         url = f"{COMPANIES_HOUSE_REST_BASE}/company/{norm_crn}/filing-history"
@@ -134,16 +136,16 @@ class CompaniesHouseCHClient:
             return []
 
     async def fetch_officers(self, crn: str) -> List[Dict[str, Any]]:
-        """Fetch company officers."""
+        """Fetch statutory company officers directly from Companies House."""
         norm_crn, valid, _ = normalize_uk_crn(crn)
         if not valid or not norm_crn:
             return []
 
-        if norm_crn in self._simulated_store:
-            return self._simulated_store[norm_crn].get("officers", [])
+        if norm_crn in self._test_fixtures:
+            return self._test_fixtures[norm_crn].get("officers", [])
 
         if not self._is_live:
-            return self._generate_simulated_officers(norm_crn)
+            return []
 
         await self.rate_limiter.acquire()
         url = f"{COMPANIES_HOUSE_REST_BASE}/company/{norm_crn}/officers"
@@ -155,56 +157,3 @@ class CompaniesHouseCHClient:
                 data = resp.json()
                 return data.get("items", [])
             return []
-
-    # --- Deterministic Simulation Fixtures for Testing & Demo ---
-    def _generate_simulated_profile(self, crn: str) -> Dict[str, Any]:
-        return {
-            "company_number": crn,
-            "company_name": f"SIMULATED ENTERPRISE {crn} LTD",
-            "company_status": "active",
-            "type": "ltd",
-            "date_of_creation": "2018-04-12",
-            "sic_codes": ["49410"],  # Freight transport by road (B2B prime)
-            "accounts": {
-                "accounting_reference_date": {"day": "31", "month": "12"},
-                "overdue": False,
-            },
-            "confirmation_statement": {"overdue": False},
-        }
-
-    def _generate_simulated_charges(self, crn: str) -> List[Dict[str, Any]]:
-        now = datetime.now(timezone.utc)
-        sat_date = (now - timedelta(days=210)).strftime("%Y-%m-%d")
-        return [
-            {
-                "id": f"chg-{crn}-1",
-                "charge_code": f"0000000{crn[:1]}001",
-                "status": "fully-satisfied",
-                "created_on": "2020-01-15",
-                "satisfied_on": sat_date,
-                "persons_entitled": [{"name": "BARCLAYS BANK PLC"}],
-                "particulars": {"type": "contains-floating-charge", "floating_charge_covers_all": True},
-            }
-        ]
-
-    def _generate_simulated_filings(self, crn: str) -> List[Dict[str, Any]]:
-        now = datetime.now(timezone.utc)
-        return [
-            {
-                "category": "accounts",
-                "type": "AA",
-                "date": (now - timedelta(days=120)).strftime("%Y-%m-%d"),
-                "description": "accounts-with-accounts-type-micro-entity",
-                "links": {"document_metadata": f"{COMPANIES_HOUSE_DOC_BASE}/document/doc-{crn}-acc"},
-            }
-        ]
-
-    def _generate_simulated_officers(self, crn: str) -> List[Dict[str, Any]]:
-        return [
-            {
-                "name": "SMITH, John David",
-                "officer_role": "director",
-                "appointed_on": "2018-04-12",
-                "resigned_on": None,
-            }
-        ]

@@ -45,10 +45,6 @@ async def lifespan(app: FastAPI):
             db.add(admin)
             db.commit()
             logger.info("Created default broker user (broker@commercialfinance.co.uk)")
-
-        # Auto-seed demonstration data if in demo mode
-        if settings.DEMO_MODE:
-            seed_demonstration_data(db)
     finally:
         db.close()
     yield

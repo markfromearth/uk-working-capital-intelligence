@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: Optional[str] = os.getenv("ANTHROPIC_API_KEY", None)
     
     # Operational switches
-    DEMO_MODE: bool = True
+    DEMO_MODE: bool = False
     ENABLE_DEAD_LETTER_QUEUE: bool = True
     MAX_RETRY_ATTEMPTS: int = 3
     RATE_LIMIT_PER_MINUTE: int = 120
