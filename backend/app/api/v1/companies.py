@@ -35,6 +35,7 @@ def list_companies(
         query = query.filter(CompanyRegistry.company_name.ilike(f"%{search}%") | CompanyRegistry.crn.ilike(f"%{search}%"))
     return query.offset(skip).limit(limit).all()
 
+@router.get("/{crn}")
 @router.get("/{crn}/profile")
 async def get_company_intelligence_profile(crn: str, db: Session = Depends(get_db)):
     norm_crn, valid, err = normalize_uk_crn(crn)
@@ -43,7 +44,30 @@ async def get_company_intelligence_profile(crn: str, db: Session = Depends(get_d
 
     company = db.query(CompanyRegistry).filter(CompanyRegistry.crn == norm_crn).first()
     if not company:
-        raise HTTPException(status_code=404, detail=f"Company with CRN {norm_crn} not found")
+        # Auto-screen on-demand from Companies House
+        try:
+            await default_pipeline_orchestrator.process_company(norm_crn)
+            company = db.query(CompanyRegistry).filter(CompanyRegistry.crn == norm_crn).first()
+        except Exception as e:
+            logger.warning(f"Auto-screening during profile lookup failed for {norm_crn}: {e}")
+
+        if not company:
+            # Query profile directly from Companies House client
+            prof = await default_pipeline_orchestrator.ch_client.fetch_profile(norm_crn)
+            if not prof:
+                raise HTTPException(status_code=404, detail=f"Company with CRN {norm_crn} not found in Companies House")
+            company = CompanyRegistry(
+                crn=norm_crn,
+                company_name=prof.get("company_name", f"Company {norm_crn}"),
+                company_status=prof.get("company_status", "active"),
+                company_type=prof.get("type", "ltd"),
+                sic_codes=",".join(prof.get("sic_codes", [])),
+                is_synthetic=0,
+                source_reference="COMPANIES_HOUSE_API",
+            )
+            db.add(company)
+            db.commit()
+            db.refresh(company)
 
     # Get latest score and contributions
     latest_score = db.query(LiquidityScoreRecord).filter(

@@ -766,23 +766,40 @@
     // --- Open Detailed Company Profile (Image 1) ---
     async function openCompanyProfile(crn) {
       try {
-        showToast(`Loading verified dossier for ${crn}...`, "info");
-        const res = await fetch(`/api/v1/companies/${crn}`);
+        showToast(`Loading verified statutory dossier for ${crn}...`, "info");
+        let res = await fetch(`/api/v1/companies/${crn}/profile`);
         if (!res.ok) {
-          showToast(`Could not load profile for ${crn}`, "error");
+          res = await fetch(`/api/v1/companies/${crn}`);
+        }
+        if (!res.ok) {
+          // If not in database yet, screen live on demand
+          const screenRes = await fetch(`/api/v1/warden/screen/${crn}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({})
+          });
+          if (screenRes.ok) {
+            res = await fetch(`/api/v1/companies/${crn}/profile`);
+          }
+        }
+
+        if (!res.ok) {
+          showToast(`Could not load profile for ${crn}. Check API status.`, "error");
           return;
         }
 
         const data = await res.json();
         activeLeadData = data;
-        const comp = data.company;
+        const comp = data.company || (data.screening_result ? { crn: data.screening_result.crn, company_name: data.screening_result.company_name, company_status: 'ACTIVE' } : { crn: crn, company_name: 'Company ' + crn, company_status: 'ACTIVE' });
         const dossier = data.warden_dossier;
         const screening = data.screening_result;
 
         // Title and Header
-        document.getElementById("detail-company-title").textContent = `${comp.company_name} (${comp.crn})`;
-        document.getElementById("detail-company-name-field").textContent = comp.company_name;
-        document.getElementById("detail-company-number-field").textContent = `(${comp.crn})`;
+        const compName = comp.company_name || (screening && screening.company_name) || `Company ${crn}`;
+        const compCrn = comp.crn || crn;
+        document.getElementById("detail-company-title").textContent = `${compName} (${compCrn})`;
+        document.getElementById("detail-company-name-field").textContent = compName;
+        document.getElementById("detail-company-number-field").textContent = `(${compCrn})`;
 
         const sic = comp.sic_codes ? comp.sic_codes.split(",")[0].trim() : "49410";
         document.getElementById("detail-sic-field").textContent = `${sic} - Freight transport`;
@@ -880,7 +897,7 @@
           document.getElementById("detail-pitch-text").textContent = dossier.commercial_pitch;
         } else {
           document.getElementById("detail-pitch-text").textContent = 
-            `${comp.company_name} holds £${debtors.toLocaleString('en-GB')} in verified trade receivables with 0 registered charges. An 80% confidential invoice discounting facility releases up to £${(debtors * 0.8).toLocaleString('en-GB')} of immediate unencumbered liquidity.`;
+            `${compName} holds £${debtors.toLocaleString('en-GB')} in verified trade receivables with 0 registered charges. An 80% confidential invoice discounting facility releases up to £${(debtors * 0.8).toLocaleString('en-GB')} of immediate unencumbered liquidity.`;
         }
 
         // Score Attribution Breakdown Table
@@ -891,7 +908,7 @@
         const tbody = document.getElementById("detail-score-attribution-tbody");
         if (audit.length > 0) {
           tbody.innerHTML = audit.map(a => {
-            let evUrl = `https://find-and-update.company-information.service.gov.uk/company/${comp.crn}`;
+            let evUrl = `https://find-and-update.company-information.service.gov.uk/company/${compCrn}`;
             if (a.primary_source && a.primary_source.uri) evUrl = a.primary_source.uri;
 
             return `
