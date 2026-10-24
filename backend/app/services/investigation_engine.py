@@ -112,6 +112,9 @@ class ValueOfInformationEngine:
             elif tool.cost_gbp > budget_remaining and tool.cost_gbp > 0.0:
                 decision = "DEFER"
                 rationale = f"Estimated API cost (£{tool.cost_gbp:.2f}) exceeds remaining 24h budget (£{budget_remaining:.2f}). Deferred to next budget window."
+            elif getattr(tool, "requires_paid_subscription", False) and not tool.is_live_ready:
+                decision = "STOP"
+                rationale = f"Tool '{tool.tool_name}' requires an active paid commercial subscription and is disabled in free-service mode."
             elif evoi_net > 0.0 and info_gain >= 0.15:
                 decision = "INVESTIGATE"
                 rationale = f"Positive commercial EVOI (+£{evoi_net:.2f}){learned_tag}. High expected uncertainty reduction ({prior_uncertainty:.2f} -> {expected_posterior_uncertainty:.2f})."
@@ -213,6 +216,9 @@ class ValueOfInformationEngine:
         elif tool.cost_gbp > remaining_budget and tool.cost_gbp > 0.0:
             decision = "DEFER"
             rationale = f"Estimated API cost (£{tool.cost_gbp:.2f}) exceeds remaining 24h budget (£{remaining_budget:.2f}). Deferred to next budget window."
+        elif getattr(tool, "requires_paid_subscription", False) and not tool.is_live_ready:
+            decision = "STOP"
+            rationale = f"Tool '{tool.tool_name}' requires an active paid commercial subscription and is disabled in free-service mode."
         elif evoi_net > 0.0 and info_gain >= 0.15:
             decision = "INVESTIGATE"
             rationale = f"Positive commercial EVOI (+£{evoi_net:.2f}){learned_tag}. High expected uncertainty reduction ({prior_uncertainty:.2f} -> {expected_posterior_uncertainty:.2f})."
@@ -254,6 +260,14 @@ class ValueOfInformationEngine:
             if (snapshot.charges_satisfied_90d or 0) > 0:
                 return 0.35, 0.40, 0.15
             return 0.15, 0.25, 0.10
+
+        elif tool.tool_name == "contracts_finder_awards_lookup":
+            # High information gain to uncover public procurement contract awards
+            return 0.40, 0.50, 0.15
+
+        elif tool.tool_name == "the_gazette_insolvency_check":
+            # Critical statutory verification of winding-up / administration status
+            return 0.45, 0.55, 0.10
 
         elif tool.tool_name == "creditsafe_deep_financials":
             # If DBT data is missing or stale, high information gain

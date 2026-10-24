@@ -23,6 +23,7 @@ class ToolDefinition(BaseModel):
     data_use_policy: str
     input_schema: Dict[str, Any] = Field(default_factory=lambda: {"type": "object", "properties": {"crn": {"type": "string"}}})
     is_live_ready: bool = False
+    requires_paid_subscription: bool = False
 
 class CircuitBreakerState:
     def __init__(self, failure_threshold: int = 3, cooldown_seconds: float = 60.0):
@@ -96,7 +97,39 @@ class ApprovedToolRegistry:
             )
         )
 
-        # 3. Creditsafe Commercial Deep Financials
+        # 3. Contracts Finder Procurement Awards (100% Free OGL)
+        cf_status = provider_registry.get_adapter("contracts_finder").get_health_status()
+        self.register_tool(
+            ToolDefinition(
+                tool_name="contracts_finder_awards_lookup",
+                provider_name="contracts_finder",
+                description="Official Contracts Finder & Find a Tender public sector contract award search (OCDS).",
+                cost_gbp=0.00,  # Free open government data
+                rate_limit_per_min=60,
+                timeout_seconds=10.0,
+                data_use_policy="open_government_licence_v3",
+                is_live_ready=True,
+                requires_paid_subscription=False,
+            )
+        )
+
+        # 4. The Gazette Corporate Insolvency Notices (100% Free Crown Copyright)
+        gz_status = provider_registry.get_adapter("the_gazette").get_health_status()
+        self.register_tool(
+            ToolDefinition(
+                tool_name="the_gazette_insolvency_check",
+                provider_name="the_gazette",
+                description="Official The Gazette statutory corporate insolvency, winding-up petition, and administration check.",
+                cost_gbp=0.00,  # Free open public record
+                rate_limit_per_min=120,
+                timeout_seconds=10.0,
+                data_use_policy="crown_copyright_ogl_v3",
+                is_live_ready=True,
+                requires_paid_subscription=False,
+            )
+        )
+
+        # 5. Creditsafe Commercial Deep Financials (Commercial Paid Provider)
         cs_status = provider_registry.get_adapter("creditsafe").get_health_status()
         self.register_tool(
             ToolDefinition(
@@ -107,11 +140,12 @@ class ApprovedToolRegistry:
                 rate_limit_per_min=60,
                 timeout_seconds=12.0,
                 data_use_policy="commercial_credit_assessment_b2b",
-                is_live_ready=cs_status.status == AdapterHealthStatus.LIVE
+                is_live_ready=cs_status.status == AdapterHealthStatus.LIVE and bool(settings.CREDITSAFE_API_KEY),
+                requires_paid_subscription=True,
             )
         )
 
-        # 4. Experian Delinquency Trace
+        # 6. Experian Delinquency Trace (Commercial Paid Provider)
         exp_status = provider_registry.get_adapter("experian").get_health_status()
         self.register_tool(
             ToolDefinition(
@@ -122,7 +156,8 @@ class ApprovedToolRegistry:
                 rate_limit_per_min=50,
                 timeout_seconds=12.0,
                 data_use_policy="commercial_credit_assessment_b2b",
-                is_live_ready=exp_status.status == AdapterHealthStatus.LIVE
+                is_live_ready=exp_status.status == AdapterHealthStatus.LIVE and bool(settings.EXPERIAN_API_KEY),
+                requires_paid_subscription=True,
             )
         )
 
@@ -257,6 +292,15 @@ class ApprovedToolRegistry:
             elif tool_name == "companies_house_profile_lookup":
                 profile = adapter.fetch_company_profile(norm_crn)
                 summary = f"Verified profile: {profile.get('company_name', 'Unknown')}, Status: {profile.get('company_status', 'Unknown')}."
+
+            elif tool_name in ("contracts_finder_awards_lookup", "the_gazette_insolvency_check"):
+                signals = adapter.fetch_company_signals(norm_crn)
+                for s in signals:
+                    s["data_use_restrictions"] = tool.data_use_policy
+                    s["provenance_details"] = f"investigation_tool:{tool_name}:{actor_user_id}"
+                    ingestion.process_normalized_signal(raw_event_id=None, signal_data=s)
+                    signals_found += 1
+                summary = f"Retrieved {signals_found} public notices/awards from {tool.provider_name}."
 
             elif tool_name in ("creditsafe_deep_financials", "experian_delinquency_trace", "workforce_hiring_velocity"):
                 signals = adapter.fetch_company_signals(norm_crn)

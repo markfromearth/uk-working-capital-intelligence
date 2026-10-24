@@ -324,3 +324,31 @@ def test_adaptive_api_rbac_and_validation():
     resp = client.post("/api/v1/adaptive/ml/train", headers=broker_headers)
     assert resp.status_code == 403
     assert "Operation requires one of the following roles" in resp.json()["detail"]
+
+
+def test_free_public_tools_zero_cost_and_execution():
+    """Verify free public tools (Contracts Finder and Gazette) are cost-free and executable."""
+    tools = approved_tool_registry.list_tools()
+    tool_map = {t.tool_name: t for t in tools}
+
+    assert "contracts_finder_awards_lookup" in tool_map
+    assert tool_map["contracts_finder_awards_lookup"].cost_gbp == 0.00
+    assert tool_map["contracts_finder_awards_lookup"].requires_paid_subscription is False
+
+    assert "the_gazette_insolvency_check" in tool_map
+    assert tool_map["the_gazette_insolvency_check"].cost_gbp == 0.00
+    assert tool_map["the_gazette_insolvency_check"].requires_paid_subscription is False
+
+    db = SessionLocal()
+    crn = "08931201"
+    # Execute contracts finder lookup
+    res_cf = approved_tool_registry.execute_tool("contracts_finder_awards_lookup", crn, db)
+    assert res_cf["success"] is True
+    assert res_cf["actual_cost_gbp"] == 0.00
+
+    # Execute gazette check
+    res_gz = approved_tool_registry.execute_tool("the_gazette_insolvency_check", crn, db)
+    assert res_gz["success"] is True
+    assert res_gz["actual_cost_gbp"] == 0.00
+    db.close()
+
