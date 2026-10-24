@@ -4,6 +4,7 @@ from backend.app.models.feature import CompanyFeatureSnapshot
 from backend.app.models.score import LiquidityScoreRecord, ScoreContributionRecord, ScoreCalibrationConfig
 from backend.app.models.user import User, AuditLog
 from backend.app.models.review import BrokerReviewAction
+from backend.app.models.marketing import MarketingChannelCandidate
 
 __all__ = [
     "CompanyRegistry",
@@ -20,4 +21,5 @@ __all__ = [
     "User",
     "AuditLog",
     "BrokerReviewAction",
+    "MarketingChannelCandidate",
 ]

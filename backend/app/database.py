@@ -40,7 +40,7 @@ def get_db():
 
 def init_db():
     # Import all models to ensure they are registered with Base metadata
-    from backend.app.models import company, signal, feature, score, user, review, investigation, decision_maker, model_prediction, warden  # noqa
+    from backend.app.models import company, signal, feature, score, user, review, investigation, decision_maker, model_prediction, warden, marketing  # noqa
     Base.metadata.create_all(bind=engine)
 
     # SQLite migration helper for new columns

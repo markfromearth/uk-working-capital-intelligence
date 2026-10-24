@@ -20,6 +20,7 @@ from backend.app.agents.signal_detection import SignalDetectionAgent
 from backend.app.agents.entity_resolution import EntityResolutionAgent
 from backend.app.agents.adaptive_investigation import AdaptiveInvestigationAgent
 from backend.app.agents.opportunity_assessment import FinanceOpportunityAgent
+from backend.app.agents.marketing_research import MarketingResearchAgent
 from backend.app.agents.independent_verification import IndependentVerificationAgent
 from backend.app.core.crn_normalizer import normalize_uk_crn
 from backend.app.core.logging import logger
@@ -33,6 +34,7 @@ class MultiAgentOrchestrator:
         self.entity_agent = EntityResolutionAgent()
         self.investigation_agent = AdaptiveInvestigationAgent()
         self.opportunity_agent = FinanceOpportunityAgent()
+        self.marketing_agent = MarketingResearchAgent()
         self.verification_agent = IndependentVerificationAgent()
 
     async def run_investigation_pipeline(
@@ -124,7 +126,26 @@ class MultiAgentOrchestrator:
         prior_results.append(res_d)
         trace.task_traces.append(res_d)
 
-        # --- STEP 5: Independent Verification (Agent J) ---
+        # --- STEP 5: Marketing Channel Research (Agent E) ---
+        req_e = AgentTaskRequest(
+            correlation_id=cid,
+            target_role=AgentRole.MARKETING_RESEARCH,
+            crn=norm_crn,
+            budget_limit_gbp=remaining_budget,
+            input_payload={
+                "company_name": trace.company_name,
+                "sic_codes": ["49410"],
+                "sector_keyword": "commercial transport",
+            },
+            provenance_chain=[r.task_id for r in prior_results],
+        )
+        res_e = await self.marketing_agent.execute(req_e)
+        accumulated_cost += res_e.cost_incurred_gbp
+        remaining_budget = max(0.0, remaining_budget - res_e.cost_incurred_gbp)
+        prior_results.append(res_e)
+        trace.task_traces.append(res_e)
+
+        # --- STEP 6: Independent Verification (Agent J) ---
         req_j = AgentTaskRequest(
             correlation_id=cid,
             target_role=AgentRole.INDEPENDENT_VERIFICATION,
