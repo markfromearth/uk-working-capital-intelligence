@@ -1,8 +1,8 @@
 """
 Companies House API Provider for CH-Only Invoice Finance Warden.
 Implements token-bucket rate limiting, canonical CRN normalization,
-and resilient live HTTP client calls.
-No simulated data fallbacks: queries genuine Companies House public data exclusively.
+resilient live HTTP client calls with retry and exception guards.
+Zero simulated data generation: queries genuine Companies House public data exclusively.
 """
 
 import asyncio
@@ -18,6 +18,8 @@ from backend.app.core.crn_normalizer import normalize_uk_crn
 
 COMPANIES_HOUSE_REST_BASE = "https://api.company-information.service.gov.uk"
 COMPANIES_HOUSE_DOC_BASE = "https://document-api.company-information.service.gov.uk"
+
+HTTP_TIMEOUT = httpx.Timeout(20.0, connect=10.0)
 
 
 class AsyncTokenBucket:
@@ -79,13 +81,17 @@ class CompaniesHouseCHClient:
         url = f"{COMPANIES_HOUSE_REST_BASE}/company/{norm_crn}"
         auth = httpx.BasicAuth(self.api_key, "")
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(url, auth=auth)
-            if resp.status_code == 200:
-                return resp.json()
-            if resp.status_code == 404:
+        try:
+            async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
+                resp = await client.get(url, auth=auth)
+                if resp.status_code == 200:
+                    return resp.json()
+                if resp.status_code == 404:
+                    return None
+                logger.error(f"CH profile lookup failed for {norm_crn}: status {resp.status_code}")
                 return None
-            logger.error(f"CH profile lookup failed for {norm_crn}: status {resp.status_code}")
+        except (httpx.TimeoutException, httpx.RequestError) as e:
+            logger.warning(f"Network error querying CH profile for {norm_crn}: {e}")
             return None
 
     async def fetch_charges(self, crn: str) -> List[Dict[str, Any]]:
@@ -104,11 +110,15 @@ class CompaniesHouseCHClient:
         url = f"{COMPANIES_HOUSE_REST_BASE}/company/{norm_crn}/charges"
         auth = httpx.BasicAuth(self.api_key, "")
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(url, auth=auth)
-            if resp.status_code == 200:
-                data = resp.json()
-                return data.get("items", [])
+        try:
+            async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
+                resp = await client.get(url, auth=auth)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return data.get("items", [])
+                return []
+        except (httpx.TimeoutException, httpx.RequestError) as e:
+            logger.warning(f"Network error querying CH charges for {norm_crn}: {e}")
             return []
 
     async def fetch_filing_history(self, crn: str, category: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -128,11 +138,15 @@ class CompaniesHouseCHClient:
         params = {"category": category} if category else {}
         auth = httpx.BasicAuth(self.api_key, "")
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(url, auth=auth, params=params)
-            if resp.status_code == 200:
-                data = resp.json()
-                return data.get("items", [])
+        try:
+            async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
+                resp = await client.get(url, auth=auth, params=params)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return data.get("items", [])
+                return []
+        except (httpx.TimeoutException, httpx.RequestError) as e:
+            logger.warning(f"Network error querying CH filing history for {norm_crn}: {e}")
             return []
 
     async def fetch_officers(self, crn: str) -> List[Dict[str, Any]]:
@@ -151,9 +165,13 @@ class CompaniesHouseCHClient:
         url = f"{COMPANIES_HOUSE_REST_BASE}/company/{norm_crn}/officers"
         auth = httpx.BasicAuth(self.api_key, "")
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(url, auth=auth)
-            if resp.status_code == 200:
-                data = resp.json()
-                return data.get("items", [])
+        try:
+            async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
+                resp = await client.get(url, auth=auth)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return data.get("items", [])
+                return []
+        except (httpx.TimeoutException, httpx.RequestError) as e:
+            logger.warning(f"Network error querying CH officers for {norm_crn}: {e}")
             return []

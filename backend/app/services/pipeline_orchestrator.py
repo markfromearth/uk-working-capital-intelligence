@@ -167,6 +167,48 @@ class WardenPipelineOrchestrator:
         )
         self._dossier_store[norm_crn] = dossier
 
+        # Persist genuine Companies House prospect to database for platform-wide visibility
+        from backend.app.database import SessionLocal
+        from backend.app.models.company import CompanyRegistry
+        from backend.app.models.score import LiquidityScoreRecord
+        
+        db = SessionLocal()
+        try:
+            existing = db.query(CompanyRegistry).filter(CompanyRegistry.crn == norm_crn).first()
+            if not existing:
+                existing = CompanyRegistry(
+                    crn=norm_crn,
+                    company_name=screening_res.company_name,
+                    company_status=profile.get("company_status", "active"),
+                    company_type=profile.get("type", "ltd"),
+                    sic_codes=",".join(screening_res.sic_codes),
+                    is_synthetic=0,
+                    source_reference="COMPANIES_HOUSE_API",
+                )
+                db.add(existing)
+            else:
+                existing.company_name = screening_res.company_name
+                existing.is_synthetic = 0
+                existing.source_reference = "COMPANIES_HOUSE_API"
+
+            score_band = "strong" if dossier.refined_score >= 70.0 else ("elevated" if dossier.refined_score >= 40.0 else "emerging")
+            score_rec = LiquidityScoreRecord(
+                crn=norm_crn,
+                score=dossier.refined_score,
+                score_band=score_band,
+                evidence_coverage="strong",
+                model_version="ch-warden-v1",
+                financing_position_score=min(25.0, screening_res.provisional_score * 0.35),
+                ai_summary=dossier.commercial_pitch,
+            )
+            db.add(score_rec)
+            db.commit()
+        except Exception as e:
+            logger.warning(f"Could not persist company {norm_crn} to DB: {e}")
+            db.rollback()
+        finally:
+            db.close()
+
         return {
             "status": "QUALIFIED",
             "message": "Prospect successfully qualified, refined, and borrowing base sized",

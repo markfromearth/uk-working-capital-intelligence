@@ -92,7 +92,7 @@ def list_prioritized_prospects(
     Returns prioritized prospects with rich filter criteria, latest signals,
     and assigned broker review status.
     """
-    companies = db.query(CompanyRegistry).all()
+    companies = db.query(CompanyRegistry).filter(CompanyRegistry.is_synthetic == 0).all()
     prospects = []
 
     for comp in companies:

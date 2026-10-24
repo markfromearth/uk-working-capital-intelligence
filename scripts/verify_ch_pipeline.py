@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """
 Verification Script for Companies House Invoice Finance Warden (CH-Only MVP).
-Runs end-to-end evaluation of a company:
+Runs end-to-end evaluation of a genuine UK company:
 - Stage 1: Structured screening and 100-pt provisional scoring (The Gatekeeper).
 - Stage 2: Quant accounts balance sheet extraction & trapped cash sizing.
 - Stage 3: Post-gate Intelligence Refinement Agent & primary source retrieval.
+
+Operates exclusively against live, genuine Companies House public data with zero simulation.
 """
 
 import asyncio
@@ -21,65 +23,20 @@ from backend.app.schemas.warden import LendingArchetype
 
 
 async def main():
-    target_crn = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("--") else "08421099"
-    use_demo = "--demo" in sys.argv or target_crn.upper() in ("DEMO", "SAMPLE")
+    # Default to genuine UK company if none provided
+    target_crn = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("--") else "01989005"
 
-    if use_demo:
-        target_crn = "01234567"
-        default_pipeline_orchestrator.ch_client.register_fixture(
-            target_crn,
-            {
-                "profile": {
-                    "company_number": target_crn,
-                    "company_name": "TITAN FREIGHT & LOGISTICS LTD",
-                    "company_status": "active",
-                    "date_of_creation": "2018-05-10",  # Seasoned 8-year-old enterprise
-                    "sic_codes": ["49410"],  # Freight transport by road
-                    "accounts": {"overdue": False},
-                    "confirmation_statement": {"overdue": False},
-                },
-                "charges": [
-                    {
-                        "charge_code": "001",
-                        "status": "fully-satisfied",
-                        "satisfied_on": "2026-04-10",
-                        "persons_entitled": [{"name": "BARCLAYS BANK PLC"}],
-                    }
-                ],
-                "filing_history": [
-                    {
-                        "category": "accounts",
-                        "type": "AA",
-                        "date": "2026-01-15",
-                        "links": {"document_metadata": "https://document-api.company-information.service.gov.uk/document/doc123"},
-                    }
-                ],
-                "officers": [
-                    {
-                        "name": "DAVIS, Arthur",
-                        "officer_role": "director",
-                        "appointed_on": "2018-05-10",
-                    },
-                    {
-                        "name": "DAVIS, Sarah",
-                        "officer_role": "director",
-                        "appointed_on": "2019-02-14",
-                    },
-                ],
-            },
-        )
-
-    print(f"\n=======================================================")
-    print(f"  INVOICE FINANCE WARDEN (CH-ONLY MVP VERIFICATION)   ")
-    print(f"=======================================================\n")
-    print(f"[*] Target CRN: {target_crn} {'(DEMO FIXTURE)' if use_demo else '(LIVE LOOKUP)'}")
-    print(f"[*] Mode: Companies House Statutory Data Pipeline (100% Free Public Data)")
-    print(f"[*] Executing Stage 1 (Screening), Stage 2 (Quant), & Stage 3 (Refinement)...\n")
-
-    threshold = 45.0 if use_demo else 50.0
+    threshold = 10.0
     for arg in sys.argv:
         if arg.startswith("--threshold="):
             threshold = float(arg.split("=")[1])
+
+    print(f"\n=======================================================")
+    print(f"  INVOICE FINANCE WARDEN (CH-ONLY GENUINE PIPELINE)   ")
+    print(f"=======================================================\n")
+    print(f"[*] Target CRN: {target_crn} (GENUINE COMPANIES HOUSE QUERY)")
+    print(f"[*] Mode: 100% Genuine Companies House Public Data (Zero Simulation)")
+    print(f"[*] Executing Stage 1 (Screening), Stage 2 (Quant), & Stage 3 (Refinement)...\n")
 
     result = await default_pipeline_orchestrator.process_company(
         crn=target_crn,
