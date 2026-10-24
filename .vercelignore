@@ -1,0 +1,12 @@
+# Keep the serverless bundle lean; these are not needed at runtime
+.venv/
+.pytest_cache/
+tests/
+docs/
+.github/
+*.db
+.env
+.env.*
+!.env.example
+Dockerfile
+docker-compose.yml
