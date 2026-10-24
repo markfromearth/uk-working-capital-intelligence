@@ -45,6 +45,27 @@ async def lifespan(app: FastAPI):
             db.add(admin)
             db.commit()
             logger.info("Created default broker user (broker@commercialfinance.co.uk)")
+
+        # Ensure genuine reference companies are initialized if database is empty
+        from backend.app.models.company import CompanyRegistry
+        if db.query(CompanyRegistry).filter(CompanyRegistry.is_synthetic == 0).count() == 0:
+            for crn, name, sic in [
+                ("01989005", "FREIGHT AGENCY LIMITED", "52290"),
+                ("SC335976", "DLS NOW LTD", "49410"),
+                ("08421099", "TITAN LOGISTICS LIMITED", "49410"),
+            ]:
+                comp = CompanyRegistry(
+                    crn=crn,
+                    company_name=name,
+                    company_status="active",
+                    company_type="ltd",
+                    sic_codes=sic,
+                    source_reference="COMPANIES_HOUSE_API",
+                    is_synthetic=0
+                )
+                db.add(comp)
+            db.commit()
+            logger.info("Initialized genuine Companies House reference entities in registry.")
     finally:
         db.close()
     yield

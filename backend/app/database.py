@@ -1,14 +1,28 @@
+import os
+import shutil
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 from backend.app.config import settings
 
 # Configure engine based on dialect (handle SQLite specifics like check_same_thread)
+database_url = settings.DATABASE_URL
+if (os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME")) and database_url.startswith("sqlite"):
+    tmp_db = "/tmp/working_capital.db"
+    if not os.path.exists(tmp_db):
+        bundle_db = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "working_capital.db")
+        if os.path.exists(bundle_db):
+            try:
+                shutil.copyfile(bundle_db, tmp_db)
+            except Exception:
+                pass
+    database_url = f"sqlite:///{tmp_db}"
+
 connect_args = {}
-if settings.DATABASE_URL.startswith("sqlite"):
+if database_url.startswith("sqlite"):
     connect_args["check_same_thread"] = False
 
 engine = create_engine(
-    settings.DATABASE_URL,
+    database_url,
     connect_args=connect_args,
     pool_pre_ping=True
 )

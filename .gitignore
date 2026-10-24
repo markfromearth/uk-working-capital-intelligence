@@ -37,3 +37,4 @@ node_modules/
 
 # Machine Learning Artifacts
 ml_models/*.pkl
+.vercel
