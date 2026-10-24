@@ -12,6 +12,7 @@ from backend.app.models.feature import CompanyFeatureSnapshot
 from backend.app.models.review import BrokerReviewAction
 from backend.app.providers.registry import provider_registry
 from backend.app.schemas.review import ProspectListItem
+from backend.app.services.pipeline_orchestrator import default_pipeline_orchestrator
 
 router = APIRouter(prefix="/prospects", tags=["Prospect Intelligence"])
 
@@ -64,6 +65,14 @@ def get_dashboard_metrics(db: Session = Depends(get_db)):
         "limited": sum(1 for s in latest_scores if s.score_band == "limited")
     }
 
+    # Qualified dossiers in memory store
+    qualified_count = len(default_pipeline_orchestrator._dossier_store)
+    total_unlocked = sum(
+        d.trapped_cash.estimated_facility_size
+        for d in default_pipeline_orchestrator._dossier_store.values()
+        if d.trapped_cash and d.trapped_cash.estimated_facility_size
+    )
+
     return {
         "total_monitored_companies": total_companies,
         "newly_detected_signals_30d": signals_30d,
@@ -71,6 +80,8 @@ def get_dashboard_metrics(db: Session = Depends(get_db)):
         "strong_prospects_count": strong_count,
         "high_priority_awaiting_review": high_priority_awaiting_review,
         "unresolved_entity_matches": unresolved_matches,
+        "total_qualified_prospects": qualified_count,
+        "total_trapped_cash_unlocked": total_unlocked,
         "band_distribution": band_distribution,
         "provider_integrations": provider_health,
         "is_demo_mode": any(db.query(CompanyRegistry.is_synthetic).filter(CompanyRegistry.is_synthetic == 1).first() or [False])
@@ -141,7 +152,15 @@ def list_prioritized_prospects(
         sig_summary_parts = []
         for s in signals:
             if s.signal_type == "charge_satisfaction_mr04":
-                sig_summary_parts.append("MR04 Charge Release")
+                sig_summary_parts.append("MR04 Bank Release")
+            elif s.signal_type == "officer_resignation_tm01":
+                sig_summary_parts.append("TM01 Officer Cluster")
+            elif s.signal_type == "accounts_balance_sheet_extracted":
+                sig_summary_parts.append("Trapped Cash Sized")
+            elif s.signal_type == "gazette_notice_gaz1":
+                sig_summary_parts.append("Gazette Notice")
+            elif s.signal_type == "new_charge_registered":
+                sig_summary_parts.append("Debenture Registered")
             elif s.signal_type == "dbt_increase":
                 sig_summary_parts.append(f"DBT {s.value_numeric:.0f}d")
             elif s.signal_type == "headcount_surge":
@@ -149,7 +168,11 @@ def list_prioritized_prospects(
             elif s.signal_type == "credit_score_drop":
                 sig_summary_parts.append("Credit Drop")
 
-        primary_summary = " + ".join(sig_summary_parts) if sig_summary_parts else "Baseline monitoring"
+        primary_summary = " + ".join(sig_summary_parts) if sig_summary_parts else "Statutory monitoring"
+
+        dossier = default_pipeline_orchestrator.get_dossier(comp.crn)
+        facility_val = dossier.trapped_cash.estimated_facility_size if dossier and dossier.trapped_cash else None
+        ch_url = f"https://find-and-update.company-information.service.gov.uk/company/{comp.crn}"
 
         prospects.append(ProspectListItem(
             crn=comp.crn,
@@ -164,7 +187,9 @@ def list_prioritized_prospects(
             review_status=current_review_status,
             assigned_broker_name=assigned_broker,
             last_updated=score_rec.scored_at if score_rec else comp.created_at,
-            is_synthetic=comp.is_synthetic or 0
+            is_synthetic=comp.is_synthetic or 0,
+            trapped_cash_facility=facility_val,
+            primary_source_url=ch_url
         ))
 
     # Sorting

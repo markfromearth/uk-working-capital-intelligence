@@ -15,6 +15,7 @@ from backend.app.services.resolution import EntityResolutionService
 from backend.app.services.feature_store import FeatureStoreService
 from backend.app.services.scoring_engine import LiquidityScoringEngine
 from backend.app.services.llm_explainer import LLMExplanationService
+from backend.app.services.pipeline_orchestrator import default_pipeline_orchestrator
 
 router = APIRouter(prefix="/companies", tags=["Companies & Intelligence Profiles"])
 
@@ -76,6 +77,9 @@ def get_company_intelligence_profile(crn: str, db: Session = Depends(get_db)):
     else:
         explanation = None
 
+    # Retrieve qualified Warden dossier if present
+    warden_dossier = default_pipeline_orchestrator.get_dossier(norm_crn)
+
     return {
         "company": {
             "crn": company.crn,
@@ -90,6 +94,7 @@ def get_company_intelligence_profile(crn: str, db: Session = Depends(get_db)):
             "is_synthetic": bool(company.is_synthetic),
             "verified_at": company.verified_at
         },
+        "warden_dossier": warden_dossier.model_dump() if warden_dossier else None,
         "score_summary": {
             "score": latest_score.score if latest_score else None,
             "score_band": latest_score.score_band if latest_score else "limited",

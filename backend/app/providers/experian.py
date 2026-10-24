@@ -41,7 +41,7 @@ class ExperianAdapter(IProviderAdapter):
             endpoint=EXPERIAN_BASE_URL,
             rate_limit_remaining=None,
             last_event_timestamp=datetime.now(timezone.utc),
-            message="No live Experian commercial license; operating in verified deterministic simulation mode."
+            message="No live Experian commercial license; provider disabled in CH-Only mode." if not settings.DEMO_MODE else "No live Experian commercial license; operating in verified deterministic simulation mode."
         )
 
     def fetch_company_signals(self, raw_crn: str) -> List[Dict[str, Any]]:

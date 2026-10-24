@@ -45,3 +45,5 @@ class ProspectListItem(BaseModel):
     assigned_broker_name: Optional[str] = None
     last_updated: datetime
     is_synthetic: int
+    trapped_cash_facility: Optional[float] = None
+    primary_source_url: Optional[str] = None

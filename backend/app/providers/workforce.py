@@ -42,7 +42,7 @@ class WorkforceAdapter(IProviderAdapter):
             endpoint=PROXYCURL_BASE_URL,
             rate_limit_remaining=None,
             last_event_timestamp=datetime.now(timezone.utc),
-            message="No live Proxycurl credentials; operating in verified deterministic simulation mode."
+            message="No live Proxycurl credentials; provider disabled in CH-Only mode." if not settings.DEMO_MODE else "No live Proxycurl credentials; operating in verified deterministic simulation mode."
         )
 
     def fetch_company_signals(self, raw_crn: str) -> List[Dict[str, Any]]:

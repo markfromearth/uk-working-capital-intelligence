@@ -44,7 +44,7 @@ class CompaniesHouseAdapter(IProviderAdapter, IStreamingAdapter):
             endpoint=COMPANIES_HOUSE_API_URL,
             rate_limit_remaining=None,
             last_event_timestamp=datetime.now(timezone.utc),
-            message="No live API key present; operating in verified deterministic simulation mode."
+            message="No live API key present; operating in verified deterministic simulation mode." if settings.DEMO_MODE else "No live Companies House API key configured."
         )
 
     def fetch_company_profile(self, raw_crn: str) -> Optional[Dict[str, Any]]:
