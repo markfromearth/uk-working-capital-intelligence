@@ -4,6 +4,7 @@ Reconciles balance sheet equations, handles FRS 105 aggregate accounts,
 calculates 80% facility borrowing bases, and generates commercial outreach copy.
 """
 
+from datetime import datetime, timezone
 from typing import List, Optional
 from backend.app.schemas.warden import (
     BalanceSheetData,
@@ -12,6 +13,7 @@ from backend.app.schemas.warden import (
     ScreeningResult,
     TrappedCashDossier,
 )
+from backend.app.services.indicator_engine import parse_date
 
 
 def get_sector_debtor_factor(sic_codes: Optional[List[str]]) -> float:
@@ -46,8 +48,31 @@ class QuantMathEngine:
         refined_score: Optional[float] = None,
         refinements: Optional[List[ScoreRefinementAdjustment]] = None,
         primary_sources: Optional[List[PrimarySourceReference]] = None,
+        as_of: Optional[datetime] = None,
     ) -> TrappedCashDossier:
-        """Calculate indicative advance and construct evidence-grounded broker pitch."""
+        """Calculate indicative advance, apply accounts aging decay, and construct evidence-grounded broker pitch."""
+        now = as_of or datetime.now(timezone.utc)
+
+        # 1. Calculate Balance Sheet Seasoning & Decay Factor (Mitigating Statutory Reporting Latency)
+        if balance_sheet.period_end_date:
+            end_dt = parse_date(balance_sheet.period_end_date)
+            if end_dt:
+                age_days = max(0.0, (now - end_dt).total_seconds() / 86400.0)
+                age_months = round(age_days / 30.44, 1)
+                balance_sheet.balance_sheet_age_months = age_months
+                if age_months <= 9.0:
+                    balance_sheet.seasoning_status = "FRESH"
+                    balance_sheet.aging_confidence_factor = 1.0
+                elif age_months <= 18.0:
+                    balance_sheet.seasoning_status = "SEASONED"
+                    balance_sheet.aging_confidence_factor = 0.85
+                else:
+                    balance_sheet.seasoning_status = "STALE"
+                    balance_sheet.aging_confidence_factor = 0.70
+        elif balance_sheet.extraction_path == "UNOBSERVED_CH_ACCOUNTS":
+            balance_sheet.seasoning_status = "UNOBSERVED"
+            balance_sheet.aging_confidence_factor = 0.50
+
         # Determine book debts
         if balance_sheet.debtors is not None and balance_sheet.debtors > 0:
             eligible_book_debts = balance_sheet.debtors
@@ -77,6 +102,11 @@ class QuantMathEngine:
             f"The business holds £{eligible_book_debts:,.0f} in {debtor_source} against £{creditors:,.0f} in creditors due within one year.",
             f"An 80% confidential invoice discounting facility releases up to £{indicative_facility:,.0f} of immediate liquidity.",
         ]
+
+        if balance_sheet.balance_sheet_age_months is not None:
+            pitch_parts.append(
+                f"[Statutory Seasoning: {balance_sheet.balance_sheet_age_months:.1f}m ({balance_sheet.seasoning_status} - {int(balance_sheet.aging_confidence_factor*100)}% confidence factor)]."
+            )
 
         if indicative_facility > creditors:
             net_surplus = indicative_facility - creditors

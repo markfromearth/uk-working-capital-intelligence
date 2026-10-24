@@ -109,3 +109,53 @@ def test_refinement_score_decrease_for_young_creditor_overhang():
     assert refined_score < 75.0
     assert any(a.direction == "DECREASE" and a.metric_name == "creditor_overhang_drag" for a in adjustments)
     assert any(a.direction == "DECREASE" and a.metric_name == "young_enterprise_discount" for a in adjustments)
+
+
+def test_refinement_score_aa01_and_sh01_adjustments():
+    now = datetime(2026, 10, 24, tzinfo=timezone.utc)
+    screening = ScreeningResult(
+        crn="08421099",
+        company_name="TITAN HAULAGE LIMITED",
+        sic_codes=["49410"],
+        is_b2b_eligible=True,
+        provisional_score=70.0,
+        passed_gate=True,
+        knockout_applied=False,
+    )
+    balance_sheet = BalanceSheetData(
+        extraction_path="IXBRL",
+        accounting_framework="FRS_102",
+        current_assets_total=600000.0,
+        debtors=450000.0,
+        cash_at_bank=50000.0,
+        creditors_due_within_one_year=200000.0,
+        net_current_assets=400000.0,
+        is_arithmetic_valid=True,
+        period_end_date="2025-01-01",  # ~21.7 months old (stale)
+        balance_sheet_age_months=21.7,
+        seasoning_status="STALE",
+    )
+    profile = {
+        "company_name": "TITAN HAULAGE LIMITED",
+        "date_of_creation": "2015-03-20",
+    }
+    filings = [
+        {"type": "AA01", "date": "2026-08-15"},  # AA01 date extension distress
+        {"type": "SH01", "date": "2026-09-01"},  # Fresh equity capital injection
+    ]
+
+    refined_score, adjustments, sources = IntelligenceRefinementAgent.refine_provisional_score(
+        screening=screening,
+        balance_sheet=balance_sheet,
+        profile=profile,
+        charges=[],
+        filings=filings,
+        officers=[],
+        as_of=now,
+    )
+
+    assert any(a.metric_name == "accounting_date_extension_distress" and a.delta_points == -5.0 for a in adjustments)
+    assert any(a.metric_name == "mid_year_equity_injection" and a.delta_points == 4.0 for a in adjustments)
+    assert any(a.metric_name == "accounts_seasoning_latency_discount" and a.delta_points == -3.0 for a in adjustments)
+    assert any(s.source_type == "COMPANIES_HOUSE_FILING" and "AA01" in s.source_id for s in sources)
+

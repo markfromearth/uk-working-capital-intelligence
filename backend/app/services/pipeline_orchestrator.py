@@ -118,6 +118,8 @@ class WardenPipelineOrchestrator:
 
                     # Attach document primary source reference
                     if balance_sheet:
+                        if not balance_sheet.period_end_date and acc_meta.get("date"):
+                            balance_sheet.period_end_date = acc_meta.get("date")
                         balance_sheet.primary_source = PrimarySourceReference(
                             source_type="ACCOUNTS_DOCUMENT",
                             source_id=doc_url.rstrip("/").split("/")[-1],

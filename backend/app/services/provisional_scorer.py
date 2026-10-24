@@ -15,27 +15,34 @@ from backend.app.schemas.warden import (
     ScreeningResult,
 )
 from backend.app.services.indicator_engine import (
+    evaluate_aa01_extension,
     evaluate_admin_delinquency,
+    evaluate_recent_event_velocity,
     evaluate_refinance_window,
+    evaluate_sh01_allotments,
     evaluate_tm01_cluster,
     evaluate_white_space,
     is_b2b_eligible,
 )
 
 DEFAULT_INDICATOR_WEIGHTS = {
-    "white_space": 35.0,
-    "refinance_window": 25.0,
-    "tm01_cluster": 15.0,
-    "admin_delinquency": 10.0,
+    "white_space": 30.0,
+    "refinance_window": 20.0,
+    "recent_event_velocity": 15.0,     # Mitigates statutory reporting latency
     "b2b_sector_fit": 15.0,
+    "sh01_capital_allotment": 10.0,    # Intra-year equity injection
+    "tm01_cluster": 5.0,
+    "admin_delinquency": 5.0,
 }
 
 DEFAULT_TOGGLES = {
     "white_space": True,
     "refinance_window": True,
+    "recent_event_velocity": True,
+    "b2b_sector_fit": True,
+    "sh01_capital_allotment": True,
     "tm01_cluster": True,
     "admin_delinquency": True,
-    "b2b_sector_fit": True,
 }
 
 
@@ -88,6 +95,9 @@ class ProvisionalScorer:
         # 2. Extract Indicators
         ws_ok, ws_factor, ws_reason, ws_source = evaluate_white_space(charges, as_of=now, crn=crn)
         refin_ok, refin_factor, refin_reason, refin_source = evaluate_refinance_window(charges, as_of=now, crn=crn)
+        vel_ok, vel_factor, vel_reason, vel_source = evaluate_recent_event_velocity(charges, filings, as_of=now, crn=crn)
+        sh01_ok, sh01_count, sh01_reason, sh01_source = evaluate_sh01_allotments(filings, as_of=now, crn=crn)
+        aa01_ok, aa01_reason, aa01_source = evaluate_aa01_extension(filings, as_of=now, crn=crn)
         tm01_ok, tm01_count, tm01_reason, tm01_source = evaluate_tm01_cluster(filings, as_of=now, crn=crn)
         delinq_ok, gazette_or_insolvent, delinq_reason, delinq_source = evaluate_admin_delinquency(profile, filings, crn=crn)
 
@@ -162,6 +172,55 @@ class ProvisionalScorer:
         )
         if refin_source and refin_ok:
             primary_sources.append(refin_source)
+
+        # Recent Statutory Event Velocity (Trailing 90 Days - Mitigates Balance Sheet Latency)
+        vel_weight = norm_weights.get("recent_event_velocity", 0.0)
+        vel_awarded = round(vel_weight * vel_factor, 1) if vel_ok else 0.0
+        total_score += vel_awarded
+        audit_trail.append(
+            IndicatorBreakdown(
+                indicator="recent_event_velocity",
+                weight=round(vel_weight, 1),
+                awarded=vel_awarded,
+                triggered=vel_ok,
+                evidence=vel_reason,
+                primary_source=vel_source,
+            )
+        )
+        if vel_source and vel_ok:
+            primary_sources.append(vel_source)
+
+        # Form SH01 Mid-Year Share Allotment (Capital Injection)
+        sh01_weight = norm_weights.get("sh01_capital_allotment", 0.0)
+        sh01_awarded = round(sh01_weight, 1) if sh01_ok else 0.0
+        total_score += sh01_awarded
+        audit_trail.append(
+            IndicatorBreakdown(
+                indicator="sh01_capital_allotment",
+                weight=round(sh01_weight, 1),
+                awarded=sh01_awarded,
+                triggered=sh01_ok,
+                evidence=sh01_reason,
+                primary_source=sh01_source,
+            )
+        )
+        if sh01_source and sh01_ok:
+            primary_sources.append(sh01_source)
+
+        # Form AA01 Accounting Reference Date Extension (Intra-Year Distress Early Warning)
+        if aa01_ok:
+            audit_trail.append(
+                IndicatorBreakdown(
+                    indicator="aa01_date_extension",
+                    weight=0.0,
+                    awarded=0.0,
+                    triggered=True,
+                    evidence=aa01_reason,
+                    primary_source=aa01_source,
+                )
+            )
+            if aa01_source:
+                primary_sources.append(aa01_source)
 
         # TM01 Resignation Cluster
         tm01_weight = norm_weights.get("tm01_cluster", 0.0)

@@ -15,7 +15,11 @@ from backend.app.schemas.warden import (
     ScreeningResult,
     TrappedCashDossier,
 )
-from backend.app.services.indicator_engine import parse_date
+from backend.app.services.indicator_engine import (
+    evaluate_aa01_extension,
+    evaluate_sh01_allotments,
+    parse_date,
+)
 
 
 class IntelligenceRefinementAgent:
@@ -193,6 +197,57 @@ class IntelligenceRefinementAgent:
                     direction="INCREASE",
                     justification=f"Facility size (£{indicative_facility:,.0f}) matches prime UK funder sweet-spot (£150k - £2m), maximizing placement conversion.",
                     primary_sources=[scale_source],
+                )
+            )
+
+        # -------------------------------------------------------------
+        # 5. Metric: Statutory Reporting Latency & Intra-Year Events
+        # -------------------------------------------------------------
+        # 5a. Form AA01 Date Extension early-warning distress
+        aa01_ok, aa01_reason, aa01_source = evaluate_aa01_extension(filings, as_of=now, crn=crn)
+        if aa01_ok and aa01_source:
+            all_sources.append(aa01_source)
+            adjustments.append(
+                ScoreRefinementAdjustment(
+                    metric_name="accounting_date_extension_distress",
+                    delta_points=-5.0,
+                    direction="DECREASE",
+                    justification="Accounting Reference Date extended (Form AA01). Statistical proxy for audit friction, HMRC arrears, or debt covenant negotiations.",
+                    primary_sources=[aa01_source],
+                )
+            )
+
+        # 5b. Form SH01 Intra-Year Equity Capital Injection
+        sh01_ok, sh01_count, sh01_reason, sh01_source = evaluate_sh01_allotments(filings, as_of=now, crn=crn)
+        if sh01_ok and sh01_source:
+            all_sources.append(sh01_source)
+            adjustments.append(
+                ScoreRefinementAdjustment(
+                    metric_name="mid_year_equity_injection",
+                    delta_points=4.0,
+                    direction="INCREASE",
+                    justification=f"Fresh capital allotment ({sh01_count} Form SH01 filing{'s' if sh01_count > 1 else ''}). Confirms ongoing shareholder solvency support intra-year.",
+                    primary_sources=[sh01_source],
+                )
+            )
+
+        # 5c. Balance Sheet Seasoning Latency Discount (> 18 months old)
+        if balance_sheet.balance_sheet_age_months is not None and balance_sheet.balance_sheet_age_months > 18.0:
+            stale_source = PrimarySourceReference(
+                source_type="ACCOUNTS_DOCUMENT",
+                source_id=f"STALE_ACCOUNTS_{crn}",
+                title="Statutory Accounts Seasoning Notice",
+                uri=f"https://find-and-update.company-information.service.gov.uk/company/{crn}/filing-history",
+                excerpt=f"Latest filed accounts period ended {balance_sheet.period_end_date} ({balance_sheet.balance_sheet_age_months:.1f} months ago).",
+            )
+            all_sources.append(stale_source)
+            adjustments.append(
+                ScoreRefinementAdjustment(
+                    metric_name="accounts_seasoning_latency_discount",
+                    delta_points=-3.0,
+                    direction="DECREASE",
+                    justification=f"Accounts seasoned ({balance_sheet.balance_sheet_age_months:.1f}m old). Higher underwriting discount applied to historical debtor ledger.",
+                    primary_sources=[stale_source],
                 )
             )
 

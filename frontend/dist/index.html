@@ -984,9 +984,12 @@
             let indTitle = a.indicator;
             if (a.indicator === 'white_space') indTitle = "1. White Space (Satisfied High-Street Bank Debentures)";
             else if (a.indicator === 'refinance_window') indTitle = "2. Refinancing Window (Secondary Factor 24–48m Debentures)";
-            else if (a.indicator === 'tm01_cluster') indTitle = "3. Officer TM01 Resignation Cluster (Leadership Turbulence)";
-            else if (a.indicator === 'b2b_sector_fit') indTitle = "4. B2B Trade SIC Sector Eligibility";
-            else if (a.indicator === 'admin_delinquency') indTitle = "5. Filing Compliance & Gazette Strike-Off Risk";
+            else if (a.indicator === 'recent_event_velocity') indTitle = "3. Real-Time Statutory Velocity (Trailing 90d MR01/MR04 Movements)";
+            else if (a.indicator === 'sh01_capital_allotment') indTitle = "4. Intra-Year Equity Injections (Form SH01 Share Allotments)";
+            else if (a.indicator === 'b2b_sector_fit') indTitle = "5. B2B Trade SIC Sector Eligibility";
+            else if (a.indicator === 'tm01_cluster') indTitle = "6. Officer TM01 Resignation Cluster (Leadership Turbulence)";
+            else if (a.indicator === 'admin_delinquency') indTitle = "7. Statutory Filing Cadence & Overdue Status";
+            else if (a.indicator === 'aa01_date_extension') indTitle = "8. Form AA01 Date Extension (Intra-Year Distress Signal)";
 
             let trigBadge = a.triggered 
               ? `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">✓ TRIGGERED</span>`
@@ -1074,22 +1077,25 @@
         document.getElementById("recon-final-score").textContent = `Final Warden Score: ${scoreVal.toFixed(1)} / 100`;
 
         // Stage 2 Quant Extraction & Trapped Cash
-        if (dossier && dossier.balance_sheet && dossier.trapped_cash) {
+        if (dossier && dossier.balance_sheet) {
           const bs = dossier.balance_sheet;
-          const tc = dossier.trapped_cash;
+          const facSize = dossier.indicative_facility_80pct || (dossier.trapped_cash && dossier.trapped_cash.estimated_facility_size) || 0;
+          const eligibleDebts = dossier.eligible_book_debts || (dossier.trapped_cash && dossier.trapped_cash.eligible_book_debts) || 0;
+          const grossDebtors = (bs.debtors !== null && bs.debtors !== undefined) ? bs.debtors : eligibleDebts;
+          const netRelease = dossier.trapped_cash_release || (dossier.trapped_cash && dossier.trapped_cash.net_liquidity_release) || facSize;
 
-          document.getElementById("modal-facility-size").textContent = `£${tc.estimated_facility_size.toLocaleString('en-GB', { maximumFractionDigits: 0 })}`;
+          document.getElementById("modal-facility-size").textContent = `£${facSize.toLocaleString('en-GB', { maximumFractionDigits: 0 })}`;
           
-          document.getElementById("bs-debtors").textContent = bs.debtors !== null ? `£${bs.debtors.toLocaleString('en-GB')}` : '£0';
-          document.getElementById("bs-cash").textContent = bs.cash_at_bank !== null ? `£${bs.cash_at_bank.toLocaleString('en-GB')}` : '£0';
-          document.getElementById("bs-current-assets").textContent = bs.current_assets !== null ? `£${bs.current_assets.toLocaleString('en-GB')}` : '£0';
-          document.getElementById("bs-creditors").textContent = bs.creditors_due_within_one_year !== null ? `£${bs.creditors_due_within_one_year.toLocaleString('en-GB')}` : '£0';
-          document.getElementById("bs-net-current-assets").textContent = bs.net_current_assets !== null ? `£${bs.net_current_assets.toLocaleString('en-GB')}` : '£0';
+          document.getElementById("bs-debtors").textContent = bs.debtors !== null && bs.debtors !== undefined ? `£${bs.debtors.toLocaleString('en-GB')}` : '£0 (FRS 105)';
+          document.getElementById("bs-cash").textContent = bs.cash_at_bank !== null && bs.cash_at_bank !== undefined ? `£${bs.cash_at_bank.toLocaleString('en-GB')}` : '£0';
+          document.getElementById("bs-current-assets").textContent = bs.current_assets_total !== null && bs.current_assets_total !== undefined ? `£${bs.current_assets_total.toLocaleString('en-GB')}` : (bs.current_assets ? `£${bs.current_assets.toLocaleString('en-GB')}` : '£0');
+          document.getElementById("bs-creditors").textContent = bs.creditors_due_within_one_year !== null && bs.creditors_due_within_one_year !== undefined ? `£${bs.creditors_due_within_one_year.toLocaleString('en-GB')}` : '£0';
+          document.getElementById("bs-net-current-assets").textContent = bs.net_current_assets !== null && bs.net_current_assets !== undefined ? `£${bs.net_current_assets.toLocaleString('en-GB')}` : '£0';
 
-          document.getElementById("tc-gross-debtors").textContent = `£${tc.gross_debtors.toLocaleString('en-GB')}`;
-          document.getElementById("tc-eligible-debts").textContent = `£${tc.eligible_book_debts.toLocaleString('en-GB')}`;
-          document.getElementById("tc-facility").textContent = `£${tc.estimated_facility_size.toLocaleString('en-GB')}`;
-          document.getElementById("tc-net-release").textContent = `£${tc.net_liquidity_release.toLocaleString('en-GB')}`;
+          document.getElementById("tc-gross-debtors").textContent = `£${grossDebtors.toLocaleString('en-GB')}`;
+          document.getElementById("tc-eligible-debts").textContent = `£${eligibleDebts.toLocaleString('en-GB')}`;
+          document.getElementById("tc-facility").textContent = `£${facSize.toLocaleString('en-GB')}`;
+          document.getElementById("tc-net-release").textContent = `£${netRelease.toLocaleString('en-GB')}`;
           document.getElementById("modal-quant-section").style.display = "block";
         } else {
           document.getElementById("modal-facility-size").textContent = "£--";

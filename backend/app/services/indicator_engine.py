@@ -322,3 +322,145 @@ def evaluate_admin_delinquency(
         )
 
     return is_delinquent, strikeoff_or_insolvent, summary, source
+
+
+def evaluate_aa01_extension(
+    filings: List[Dict[str, Any]],
+    as_of: Optional[datetime] = None,
+    crn: str = "",
+) -> Tuple[bool, str, Optional[PrimarySourceReference]]:
+    """
+    Evaluates Form AA01 / AA02 (Change of Accounting Reference Date).
+    Under Section 392 of the Companies Act 2006, extending the accounting period
+    is frequently used as an intra-year distress tactic to buy time for overdue audits,
+    HMRC deferrals, or debt covenant restructuring.
+    """
+    now = as_of or datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=365)
+
+    for f in filings:
+        f_type = str(f.get("type", "")).upper()
+        f_date = parse_date(f.get("date"))
+
+        if f_type in ("AA01", "AA02") and f_date and f_date >= cutoff:
+            days_ago = int((now - f_date).total_seconds() / 86400.0)
+            source = PrimarySourceReference(
+                source_type="COMPANIES_HOUSE_FILING",
+                source_id=f"AA01_EXTENSION_{f.get('date', 'recent')}",
+                title="Form AA01 Change of Accounting Reference Date",
+                uri=f"https://find-and-update.company-information.service.gov.uk/company/{crn}/filing-history" if crn else "",
+                published_date=f.get("date"),
+                excerpt=f"Accounting Reference Date extended via Form {f_type} filed on {f.get('date')} ({days_ago}d ago)",
+            )
+            return (
+                True,
+                f"Early-warning distress: Accounting Reference Date extended via Form {f_type} {days_ago}d ago (Section 392 extension)",
+                source,
+            )
+
+    return False, "Standard accounting reference period maintained (no AA01 extension in trailing 12m)", None
+
+
+def evaluate_sh01_allotments(
+    filings: List[Dict[str, Any]],
+    as_of: Optional[datetime] = None,
+    crn: str = "",
+) -> Tuple[bool, int, str, Optional[PrimarySourceReference]]:
+    """
+    Evaluates Form SH01 (Return of Allotment of Shares).
+    Filing of SH01 within the trailing 180 days represents genuine intra-year equity capital
+    injected into the business, validating going-concern solvency between annual balance sheets.
+    """
+    now = as_of or datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=180)
+    count = 0
+    latest_date = None
+
+    for f in filings:
+        f_type = str(f.get("type", "")).upper()
+        f_date = parse_date(f.get("date"))
+
+        if f_type == "SH01" and f_date and f_date >= cutoff:
+            count += 1
+            if latest_date is None or f.get("date") > latest_date:
+                latest_date = f.get("date")
+
+    if count > 0:
+        source = PrimarySourceReference(
+            source_type="COMPANIES_HOUSE_FILING",
+            source_id="SH01_SHARE_ALLOTMENT",
+            title=f"Form SH01 Return of Allotment of Shares ({count} allotment{'s' if count > 1 else ''})",
+            uri=f"https://find-and-update.company-information.service.gov.uk/company/{crn}/filing-history" if crn else "",
+            published_date=latest_date,
+            excerpt=f"{count} Form SH01 share allotment(s) filed in trailing 180 days (Latest: {latest_date})",
+        )
+        return (
+            True,
+            count,
+            f"Intra-year equity injection: {count} Form SH01 share allotment(s) registered in trailing 180 days (validated mid-year capital expansion)",
+            source,
+        )
+
+    return False, 0, "No share allotments (SH01) recorded in trailing 180 days", None
+
+
+def evaluate_recent_event_velocity(
+    charges: List[Dict[str, Any]],
+    filings: List[Dict[str, Any]],
+    as_of: Optional[datetime] = None,
+    crn: str = "",
+) -> Tuple[bool, float, str, Optional[PrimarySourceReference]]:
+    """
+    Evaluates high-impact statutory movements within the trailing 90 days.
+    Bypasses annual accounts latency by detecting zero-to-90-day actions:
+    1. Fresh MR04 satisfaction of bank charges (immediate unencumbered sales ledger).
+    2. Recent MR01 debenture registrations (intra-year capital changes).
+    """
+    now = as_of or datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=90)
+
+    # 1. Check for ultra-recent MR04 charge satisfactions (trailing 90 days)
+    for chg in charges:
+        sat_date = parse_date(chg.get("satisfied_on"))
+        if sat_date and sat_date >= cutoff:
+            days_ago = int((now - sat_date).total_seconds() / 86400.0)
+            persons = chg.get("persons_entitled", [])
+            lender_name = persons[0].get("name", "Lender") if persons else "Charge Holder"
+            source = PrimarySourceReference(
+                source_type="COMPANIES_HOUSE_CHARGES",
+                source_id=chg.get("charge_code", str(chg.get("id", "recent_mr04"))),
+                title=f"Recent Form MR04 Charge Satisfaction ({lender_name})",
+                uri=f"https://find-and-update.company-information.service.gov.uk/company/{crn}/charges" if crn else "",
+                published_date=chg.get("satisfied_on"),
+                excerpt=f"Form MR04 recorded full satisfaction on {chg.get('satisfied_on')} ({days_ago}d ago)",
+            )
+            return (
+                True,
+                1.0,
+                f"Ultra-fresh statutory velocity: {lender_name} charge satisfied just {days_ago}d ago. Peak origination window.",
+                source,
+            )
+
+    # 2. Check for recent MR01 filings in filing history (trailing 90 days)
+    for f in filings:
+        f_type = str(f.get("type", "")).upper()
+        f_date = parse_date(f.get("date"))
+        if f_type in ("MR01", "MG01") and f_date and f_date >= cutoff:
+            days_ago = int((now - f_date).total_seconds() / 86400.0)
+            source = PrimarySourceReference(
+                source_type="COMPANIES_HOUSE_FILING",
+                source_id=f"RECENT_CHARGE_{f.get('date', '90d')}",
+                title="Recent Form MR01 Mortgage Registration",
+                uri=f"https://find-and-update.company-information.service.gov.uk/company/{crn}/charges" if crn else "",
+                published_date=f.get("date"),
+                excerpt=f"New Form MR01 charge registered on {f.get('date')} ({days_ago}d ago)",
+            )
+            return (
+                True,
+                0.7,
+                f"Recent statutory debt activity: Form MR01 registered {days_ago}d ago (intra-year lender engagement)",
+                source,
+            )
+
+    return False, 0.0, "No high-impact statutory movements (MR01/MR04) within trailing 90 days", None
+

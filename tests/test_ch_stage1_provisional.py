@@ -14,11 +14,14 @@ from backend.app.providers.companies_house_ch import (
 )
 from backend.app.services.indicator_engine import (
     classify_lender,
-    is_b2b_eligible,
-    evaluate_white_space,
-    evaluate_refinance_window,
-    evaluate_tm01_cluster,
+    evaluate_aa01_extension,
     evaluate_admin_delinquency,
+    evaluate_recent_event_velocity,
+    evaluate_refinance_window,
+    evaluate_sh01_allotments,
+    evaluate_tm01_cluster,
+    evaluate_white_space,
+    is_b2b_eligible,
 )
 from backend.app.services.provisional_scorer import ProvisionalScorer
 
@@ -186,6 +189,50 @@ def test_provisional_scorer_passing_gate():
     assert result.provisional_score >= 40.0
     assert result.is_b2b_eligible is True
     assert len(result.primary_sources) >= 2
+
+
+def test_aa01_extension_detection():
+    now = datetime(2026, 10, 24, tzinfo=timezone.utc)
+    filings = [
+        {"type": "AA01", "date": (now - timedelta(days=60)).strftime("%Y-%m-%d")},
+        {"type": "CS01", "date": "2026-01-10"},
+    ]
+    ok, reason, source = evaluate_aa01_extension(filings, as_of=now, crn="08421099")
+    assert ok is True
+    assert "Early-warning distress" in reason
+    assert source is not None
+    assert source.source_id.startswith("AA01_EXTENSION")
+
+
+def test_sh01_capital_allotment_detection():
+    now = datetime(2026, 10, 24, tzinfo=timezone.utc)
+    filings = [
+        {"type": "SH01", "date": (now - timedelta(days=45)).strftime("%Y-%m-%d")},
+        {"type": "SH01", "date": (now - timedelta(days=120)).strftime("%Y-%m-%d")},
+    ]
+    ok, count, reason, source = evaluate_sh01_allotments(filings, as_of=now, crn="08421099")
+    assert ok is True
+    assert count == 2
+    assert "Intra-year equity injection" in reason
+    assert source is not None
+
+
+def test_recent_event_velocity_detection():
+    now = datetime(2026, 10, 24, tzinfo=timezone.utc)
+    charges = [
+        {
+            "charge_code": "009",
+            "status": "fully-satisfied",
+            "satisfied_on": (now - timedelta(days=25)).strftime("%Y-%m-%d"),
+            "persons_entitled": [{"name": "LLOYDS BANK PLC"}],
+        }
+    ]
+    filings = []
+    ok, factor, reason, source = evaluate_recent_event_velocity(charges, filings, as_of=now, crn="08421099")
+    assert ok is True
+    assert factor == 1.0
+    assert "satisfied just 25d ago" in reason
+    assert source is not None
 
 
 @pytest.mark.asyncio

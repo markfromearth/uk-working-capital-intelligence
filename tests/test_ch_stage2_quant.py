@@ -168,3 +168,64 @@ def test_accounts_fetcher_metadata_selector():
     selected = fetcher.extract_latest_accounts_metadata(filings)
     assert selected is not None
     assert selected["type"] == "AA"
+
+
+def test_quant_math_seasoning_decay():
+    from datetime import datetime, timezone
+    now = datetime(2026, 10, 24, tzinfo=timezone.utc)
+    screening = ScreeningResult(
+        crn="08421099",
+        company_name="TITAN HAULAGE LIMITED",
+        sic_codes=["49410"],
+        is_b2b_eligible=True,
+        provisional_score=75.0,
+        passed_gate=True,
+        knockout_applied=False,
+    )
+
+    # 1. Fresh accounts (5 months old)
+    bs_fresh = BalanceSheetData(
+        extraction_path="IXBRL",
+        accounting_framework="FRS_102",
+        period_end_date="2026-05-24",
+        current_assets_total=500000.0,
+        debtors=350000.0,
+        creditors_due_within_one_year=200000.0,
+        net_current_assets=300000.0,
+        is_arithmetic_valid=True,
+    )
+    dossier_fresh = QuantMathEngine.size_facility(screening, bs_fresh, as_of=now)
+    assert bs_fresh.seasoning_status == "FRESH"
+    assert bs_fresh.aging_confidence_factor == 1.0
+    assert "Statutory Seasoning:" in dossier_fresh.commercial_pitch
+
+    # 2. Seasoned accounts (14 months old)
+    bs_seasoned = BalanceSheetData(
+        extraction_path="IXBRL",
+        accounting_framework="FRS_102",
+        period_end_date="2025-08-24",
+        current_assets_total=500000.0,
+        debtors=350000.0,
+        creditors_due_within_one_year=200000.0,
+        net_current_assets=300000.0,
+        is_arithmetic_valid=True,
+    )
+    QuantMathEngine.size_facility(screening, bs_seasoned, as_of=now)
+    assert bs_seasoned.seasoning_status == "SEASONED"
+    assert bs_seasoned.aging_confidence_factor == 0.85
+
+    # 3. Stale accounts (22 months old)
+    bs_stale = BalanceSheetData(
+        extraction_path="IXBRL",
+        accounting_framework="FRS_102",
+        period_end_date="2024-12-24",
+        current_assets_total=500000.0,
+        debtors=350000.0,
+        creditors_due_within_one_year=200000.0,
+        net_current_assets=300000.0,
+        is_arithmetic_valid=True,
+    )
+    QuantMathEngine.size_facility(screening, bs_stale, as_of=now)
+    assert bs_stale.seasoning_status == "STALE"
+    assert bs_stale.aging_confidence_factor == 0.70
+

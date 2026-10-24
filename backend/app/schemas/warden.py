@@ -74,6 +74,9 @@ class BalanceSheetData(BaseModel):
     net_current_assets: float
     is_arithmetic_valid: bool
     rounding_variance: float = 0.0
+    balance_sheet_age_months: Optional[float] = None
+    seasoning_status: str = "FRESH"  # "FRESH" (<=9m), "SEASONED" (9-18m), "STALE" (>18m), "UNOBSERVED"
+    aging_confidence_factor: float = 1.0  # 1.0 for fresh, 0.85 for seasoned, 0.70 for stale
     primary_source: Optional[PrimarySourceReference] = None
 
 
