@@ -202,3 +202,51 @@ class CompaniesHouseCHClient:
         except (httpx.TimeoutException, httpx.RequestError) as e:
             logger.warning(f"Network error querying CH PSCs for {norm_crn}: {e}")
             return []
+
+
+async def _advanced_search(
+    self: "CompaniesHouseCHClient",
+    sic_codes: List[str],
+    size: int = 20,
+    start_index: int = 0,
+    company_status: str = "active",
+    incorporated_from: Optional[str] = None,
+    incorporated_to: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Genuine Companies House Advanced Search (GET /advanced-search/companies).
+    Returns {"hits": int, "items": [...]} - zero simulated data.
+    """
+    if not self._is_live:
+        logger.warning("Companies House live credentials unconfigured. Advanced search unavailable.")
+        return {"hits": 0, "items": []}
+
+    params: Dict[str, Any] = {
+        "company_status": company_status,
+        "size": max(1, min(int(size), 100)),
+        "start_index": max(0, int(start_index)),
+    }
+    clean_sics = [s.strip() for s in sic_codes if s and s.strip()]
+    if clean_sics:
+        params["sic_codes"] = ",".join(clean_sics)
+    if incorporated_from:
+        params["incorporated_from"] = incorporated_from
+    if incorporated_to:
+        params["incorporated_to"] = incorporated_to
+
+    await self.rate_limiter.acquire()
+    url = f"{COMPANIES_HOUSE_REST_BASE}/advanced-search/companies"
+    try:
+        async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
+            resp = await client.get(url, auth=httpx.BasicAuth(self.api_key, ""), params=params)
+            if resp.status_code == 200:
+                data = resp.json()
+                return {"hits": data.get("hits", 0), "items": data.get("items", []) or []}
+            logger.error(f"CH advanced search failed: status {resp.status_code} params={params}")
+            return {"hits": 0, "items": []}
+    except (httpx.TimeoutException, httpx.RequestError) as e:
+        logger.warning(f"Network error on CH advanced search: {e}")
+        return {"hits": 0, "items": []}
+
+
+CompaniesHouseCHClient.advanced_search = _advanced_search

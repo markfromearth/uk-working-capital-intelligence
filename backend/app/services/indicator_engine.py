@@ -464,3 +464,125 @@ def evaluate_recent_event_velocity(
 
     return False, 0.0, "No high-impact statutory movements (MR01/MR04) within trailing 90 days", None
 
+
+
+# ---------------------------------------------------------------------------
+# Multi-Product Opportunity Indicators (informational; zero score weight)
+# These broaden lead surfacing beyond invoice discounting to the client's
+# wider product shelf (asset finance, refinance, term debt) using only
+# genuine Companies House charge-register evidence.
+# ---------------------------------------------------------------------------
+
+ASSET_FINANCIER_PATTERN = re.compile(
+    r"\b(lombard|close brothers|hitachi capital|novuna|siemens financial|bnp paribas leasing|"
+    r"investec asset finance|shire leasing|aldermore|paragon|time finance|haydock finance|"
+    r"pcl|propel finance|white oak|aldermore|scania finance|volvo financial|daf financial|"
+    r"mercedes-benz financial|man financial|jcb finance|john deere financial|cnh industrial capital|"
+    r"agco finance|kubota|toyota financial|caterpillar financial|de lage landen|dll|"
+    r"leasing|asset finance|hire purchase)\b",
+    re.IGNORECASE,
+)
+
+_OUTSTANDING_STATUSES = ("outstanding", "created", "active", "part-satisfied")
+
+
+def _charge_holder_names(chg: Dict[str, Any]) -> List[str]:
+    return [p.get("name", "") for p in chg.get("persons_entitled", []) or [] if p.get("name")]
+
+
+def summarise_charges(charges: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Summarise the genuine CH charge register for display (no inference)."""
+    outstanding = [c for c in charges if str(c.get("status", "")).lower() in _OUTSTANDING_STATUSES]
+    satisfied = [c for c in charges if str(c.get("status", "")).lower() in ("fully-satisfied", "satisfied")]
+    holders: List[str] = []
+    for c in outstanding:
+        for n in _charge_holder_names(c):
+            if n not in holders:
+                holders.append(n)
+    return {
+        "total": len(charges),
+        "outstanding": len(outstanding),
+        "satisfied": len(satisfied),
+        "outstanding_holders": holders,
+    }
+
+
+def evaluate_incumbent_lender(
+    charges: List[Dict[str, Any]],
+    as_of: Optional[datetime] = None,
+    crn: str = "",
+) -> Tuple[bool, str, Optional[str], Optional[PrimarySourceReference]]:
+    """
+    Incumbent Lender Facility:
+    Outstanding charge held by a High Street bank or secondary/alternative financier
+    that has been in place >= 36 months. Indicates an established facility that may be
+    due for review, refinance, or competitive takeout.
+    Returns (triggered, description, lender_class, source).
+    """
+    now = as_of or datetime.now(timezone.utc)
+    for chg in charges:
+        if str(chg.get("status", "")).lower() not in _OUTSTANDING_STATUSES:
+            continue
+        created_on = parse_date(chg.get("created_on"))
+        if not created_on:
+            continue
+        age_days = (now - created_on).total_seconds() / 86400.0
+        if age_days < 1095.0:
+            continue
+        for name in _charge_holder_names(chg):
+            cls = classify_lender(name)
+            if cls == LenderClassification.UNCLASSIFIED:
+                continue
+            years = age_days / 365.25
+            source = PrimarySourceReference(
+                source_type="COMPANIES_HOUSE_CHARGES",
+                source_id=chg.get("charge_code", str(chg.get("id", "incumbent_charge"))),
+                title=f"Outstanding Charge ({name})",
+                uri=f"https://find-and-update.company-information.service.gov.uk/company/{crn}/charges" if crn else "",
+                published_date=chg.get("created_on"),
+                excerpt=f"Outstanding charge in favour of {name} registered {chg.get('created_on')} ({years:.1f} years)",
+            )
+            return (
+                True,
+                f"Incumbent facility: outstanding charge with {name} in place {years:.1f} years (review/takeout candidate)",
+                cls.value,
+                source,
+            )
+    return False, "No seasoned (36m+) outstanding charges held by identified lenders", None, None
+
+
+def evaluate_asset_finance_charges(
+    charges: List[Dict[str, Any]],
+    crn: str = "",
+) -> Tuple[bool, int, str, Optional[PrimarySourceReference]]:
+    """
+    Asset Finance Footprint:
+    Outstanding charges registered in favour of asset / leasing financiers, or charges whose
+    particulars describe specific plant, vehicles or equipment. Indicates an asset-heavy
+    business suited to asset finance, asset refinance or equity release.
+    """
+    hits: List[Dict[str, Any]] = []
+    for chg in charges:
+        if str(chg.get("status", "")).lower() not in _OUTSTANDING_STATUSES:
+            continue
+        names = " ".join(_charge_holder_names(chg))
+        particulars = str(chg.get("particulars", "")).lower()
+        classification = str(chg.get("classification", {}).get("description", "")).lower() if isinstance(chg.get("classification"), dict) else ""
+        if ASSET_FINANCIER_PATTERN.search(names) or any(
+            kw in particulars or kw in classification
+            for kw in ("chattel", "vehicle", "machinery", "equipment", "plant", "hire purchase")
+        ):
+            hits.append(chg)
+    if hits:
+        first = hits[0]
+        holder = (_charge_holder_names(first) or ["asset financier"])[0]
+        source = PrimarySourceReference(
+            source_type="COMPANIES_HOUSE_CHARGES",
+            source_id=first.get("charge_code", str(first.get("id", "asset_charge"))),
+            title=f"Asset-Backed Charge ({holder})",
+            uri=f"https://find-and-update.company-information.service.gov.uk/company/{crn}/charges" if crn else "",
+            published_date=first.get("created_on"),
+            excerpt=f"{len(hits)} outstanding asset-backed charge(s); latest holder {holder}",
+        )
+        return True, len(hits), f"Asset finance footprint: {len(hits)} outstanding asset-backed charge(s) (e.g. {holder})", source
+    return False, 0, "No outstanding asset-backed or leasing charges", None

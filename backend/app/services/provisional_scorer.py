@@ -17,6 +17,8 @@ from backend.app.schemas.warden import (
 from backend.app.services.indicator_engine import (
     evaluate_aa01_extension,
     evaluate_admin_delinquency,
+    evaluate_asset_finance_charges,
+    evaluate_incumbent_lender,
     evaluate_recent_event_velocity,
     evaluate_refinance_window,
     evaluate_sh01_allotments,
@@ -100,6 +102,8 @@ class ProvisionalScorer:
         aa01_ok, aa01_reason, aa01_source = evaluate_aa01_extension(filings, as_of=now, crn=crn)
         tm01_ok, tm01_count, tm01_reason, tm01_source = evaluate_tm01_cluster(filings, as_of=now, crn=crn)
         delinq_ok, gazette_or_insolvent, delinq_reason, delinq_source = evaluate_admin_delinquency(profile, filings, crn=crn)
+        incumbent_ok, incumbent_reason, _incumbent_cls, incumbent_source = evaluate_incumbent_lender(charges, as_of=now, crn=crn)
+        asset_ok, _asset_count, asset_reason, asset_source = evaluate_asset_finance_charges(charges, crn=crn)
 
         # 3. Check Hard Knockouts
         if self.archetype == LendingArchetype.PRIME_INVOICE_DISCOUNTING and gazette_or_insolvent:
@@ -221,6 +225,25 @@ class ProvisionalScorer:
             )
             if aa01_source:
                 primary_sources.append(aa01_source)
+
+        # Multi-product informational indicators (zero weight; drive product matching & surfacing)
+        for _ind, _ok, _reason, _src in (
+            ("incumbent_lender_facility", incumbent_ok, incumbent_reason, incumbent_source),
+            ("asset_finance_footprint", asset_ok, asset_reason, asset_source),
+        ):
+            if _ok:
+                audit_trail.append(
+                    IndicatorBreakdown(
+                        indicator=_ind,
+                        weight=0.0,
+                        awarded=0.0,
+                        triggered=True,
+                        evidence=_reason,
+                        primary_source=_src,
+                    )
+                )
+                if _src:
+                    primary_sources.append(_src)
 
         # TM01 Resignation Cluster
         tm01_weight = norm_weights.get("tm01_cluster", 0.0)

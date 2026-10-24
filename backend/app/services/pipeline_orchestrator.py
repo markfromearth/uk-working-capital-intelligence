@@ -6,6 +6,8 @@ Coordinates:
 - Stage 3: Post-Gate Intelligence Refinement Agent & Primary Source Attribution
 """
 
+import asyncio
+import json
 from typing import Any, Dict, List, Optional
 from backend.app.core.logging import logger
 from backend.app.core.crn_normalizer import normalize_uk_crn
@@ -23,6 +25,8 @@ from backend.app.services.ixbrl_parser import IXBRLParser
 from backend.app.services.pdf_vision_extractor import PDFVisionExtractor
 from backend.app.services.quant_math import QuantMathEngine
 from backend.app.services.refinement_agent import IntelligenceRefinementAgent
+from backend.app.services.indicator_engine import summarise_charges, ELIGIBLE_B2B_PREFIXES
+from backend.app.services.product_matcher import match_products, is_surfaced, triggered_indicators
 
 
 class WardenPipelineOrchestrator:
@@ -47,6 +51,7 @@ class WardenPipelineOrchestrator:
         toggles: Optional[Dict[str, bool]] = None,
         archetype: LendingArchetype = LendingArchetype.PRIME_INVOICE_DISCOUNTING,
         min_gate_threshold: float = 65.0,
+        discovery_source: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Execute end-to-end evaluation pipeline for a company.
@@ -84,6 +89,8 @@ class WardenPipelineOrchestrator:
         )
         screening_res = scorer.score_company(norm_crn, profile, charges, filings)
         self._screening_store[norm_crn] = screening_res
+        products = match_products(screening_res)
+        self._persist_screening(screening_res, profile, charges, products, discovery_source)
 
         # Gate Check: Stop here if below qualification gate or knocked out
         if not screening_res.passed_gate:
@@ -96,6 +103,8 @@ class WardenPipelineOrchestrator:
                 "message": "Company did not meet provisional score qualification threshold",
                 "screening": screening_res,
                 "dossier": None,
+                "surfaced": is_surfaced(screening_res),
+                "products": products,
             }
 
         # --- STAGE 2: Quant Accounts Extraction & Trapped Cash Sizing ---
@@ -170,6 +179,7 @@ class WardenPipelineOrchestrator:
             primary_sources=all_primary_sources,
         )
         self._dossier_store[norm_crn] = dossier
+        self._persist_dossier(norm_crn, dossier)
 
         # Persist genuine Companies House prospect to database for platform-wide visibility
         from backend.app.database import SessionLocal
@@ -218,6 +228,8 @@ class WardenPipelineOrchestrator:
             "message": "Prospect successfully qualified, refined, and borrowing base sized",
             "screening": screening_res,
             "dossier": dossier,
+            "surfaced": is_surfaced(screening_res),
+            "products": products,
         }
 
     def get_prospects(self) -> List[TrappedCashDossier]:
@@ -229,14 +241,184 @@ class WardenPipelineOrchestrator:
         return sorted(prospects, key=lambda d: d.indicative_facility_80pct, reverse=True)
 
     def get_dossier(self, crn: str) -> Optional[TrappedCashDossier]:
-        """Retrieve stored dossier for a company."""
+        """Retrieve stored dossier for a company (memory, then persistent store)."""
         norm_crn, valid, _ = normalize_uk_crn(crn)
-        return self._dossier_store.get(norm_crn if valid and norm_crn else crn)
+        key = norm_crn if valid and norm_crn else crn
+        if key in self._dossier_store:
+            return self._dossier_store[key]
+        rec = self._load_record(key)
+        if rec is not None and rec.dossier_json:
+            try:
+                dossier = TrappedCashDossier.model_validate_json(rec.dossier_json)
+                self._dossier_store[key] = dossier
+                return dossier
+            except Exception as e:
+                logger.warning(f"Could not hydrate dossier for {key}: {e}")
+        return None
 
     def get_screening(self, crn: str) -> Optional[ScreeningResult]:
-        """Retrieve stored Stage 1 screening result and indicator audit trail for a company."""
+        """Retrieve stored Stage 1 screening result (memory, then persistent store)."""
         norm_crn, valid, _ = normalize_uk_crn(crn)
-        return self._screening_store.get(norm_crn if valid and norm_crn else crn)
+        key = norm_crn if valid and norm_crn else crn
+        if key in self._screening_store:
+            return self._screening_store[key]
+        rec = self._load_record(key)
+        if rec is not None and rec.screening_json:
+            try:
+                screening = ScreeningResult.model_validate_json(rec.screening_json)
+                self._screening_store[key] = screening
+                return screening
+            except Exception as e:
+                logger.warning(f"Could not hydrate screening for {key}: {e}")
+        return None
+
+    # ------------------------------------------------------------------
+    # Persistence
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _load_record(crn: str):
+        from backend.app.database import SessionLocal
+        from backend.app.models.warden import WardenScreeningRecord
+
+        db = SessionLocal()
+        try:
+            return db.query(WardenScreeningRecord).filter(WardenScreeningRecord.crn == crn).first()
+        except Exception:
+            return None
+        finally:
+            db.close()
+
+    def _persist_screening(
+        self,
+        screening: ScreeningResult,
+        profile: Dict[str, Any],
+        charges: List[Dict[str, Any]],
+        products: List[Dict[str, Any]],
+        discovery_source: Optional[str] = None,
+    ) -> None:
+        from backend.app.database import SessionLocal
+        from backend.app.models.warden import WardenScreeningRecord
+        from backend.app.models.company import CompanyRegistry
+
+        signals = triggered_indicators(screening)
+        surfaced = is_surfaced(screening)
+        db = SessionLocal()
+        try:
+            rec = db.query(WardenScreeningRecord).filter(WardenScreeningRecord.crn == screening.crn).first()
+            if rec is None:
+                rec = WardenScreeningRecord(crn=screening.crn)
+                db.add(rec)
+            rec.company_name = screening.company_name
+            rec.company_status = profile.get("company_status")
+            rec.sic_codes = ",".join(screening.sic_codes or [])
+            rec.is_b2b = int(bool(screening.is_b2b_eligible))
+            rec.knockout_applied = int(bool(screening.knockout_applied))
+            rec.knockout_reason = screening.knockout_reason
+            rec.provisional_score = screening.provisional_score
+            rec.surfaced = int(surfaced)
+            rec.indicator_count = len(signals)
+            rec.triggered_indicators = json.dumps(signals)
+            rec.matched_products = json.dumps(products)
+            rec.product_codes = "," + ",".join(p["code"] for p in products) + "," if products else ""
+            rec.charges_summary = json.dumps(summarise_charges(charges))
+            rec.screening_json = screening.model_dump_json()
+            if discovery_source:
+                rec.discovery_source = discovery_source
+
+            # Keep the company registry in sync for genuine screened entities (surfaced or explicitly screened)
+            comp = db.query(CompanyRegistry).filter(CompanyRegistry.crn == screening.crn).first()
+            if comp is None:
+                comp = CompanyRegistry(crn=screening.crn, company_name=screening.company_name, is_synthetic=0)
+                db.add(comp)
+            comp.company_name = screening.company_name
+            comp.company_status = profile.get("company_status", comp.company_status)
+            comp.company_type = profile.get("type", comp.company_type)
+            comp.sic_codes = ",".join(screening.sic_codes or [])
+            comp.source_reference = "COMPANIES_HOUSE_API"
+            comp.is_synthetic = 0
+            db.commit()
+        except Exception as e:
+            logger.warning(f"Could not persist screening for {screening.crn}: {e}")
+            db.rollback()
+        finally:
+            db.close()
+
+    def _persist_dossier(self, crn: str, dossier: TrappedCashDossier) -> None:
+        from backend.app.database import SessionLocal
+        from backend.app.models.warden import WardenScreeningRecord
+
+        db = SessionLocal()
+        try:
+            rec = db.query(WardenScreeningRecord).filter(WardenScreeningRecord.crn == crn).first()
+            if rec is None:
+                return
+            rec.refined_score = dossier.refined_score
+            rec.dossier_json = dossier.model_dump_json()
+            if dossier.eligible_book_debts > 0:
+                rec.eligible_book_debts = dossier.eligible_book_debts
+                rec.indicative_facility = dossier.indicative_facility_80pct
+                cat = dossier.balance_sheet.current_assets_total if dossier.balance_sheet else 0
+                if cat and cat > 0:
+                    rec.debtors_to_assets_ratio = int(round(dossier.eligible_book_debts / cat * 100))
+            db.commit()
+        except Exception as e:
+            logger.warning(f"Could not persist dossier for {crn}: {e}")
+            db.rollback()
+        finally:
+            db.close()
+
+    # ------------------------------------------------------------------
+    # Discovery: genuine Companies House advanced search -> screen -> surface
+    # ------------------------------------------------------------------
+    async def discover(
+        self,
+        sic_codes: List[str],
+        size: int = 20,
+        start_index: int = 0,
+        incorporated_from: Optional[str] = None,
+        incorporated_to: Optional[str] = None,
+        concurrency: int = 3,
+    ) -> Dict[str, Any]:
+        """Find active B2B companies on Companies House and screen each one (Stage 1)."""
+        search = await self.ch_client.advanced_search(
+            sic_codes=sic_codes,
+            size=size,
+            start_index=start_index,
+            incorporated_from=incorporated_from,
+            incorporated_to=incorporated_to,
+        )
+        items = search.get("items", [])
+        sem = asyncio.Semaphore(max(1, concurrency))
+        source_tag = f"CH_ADVANCED_SEARCH:{','.join(sic_codes)[:80]}"
+
+        async def _screen(item: Dict[str, Any]) -> Dict[str, Any]:
+            crn = item.get("company_number")
+            async with sem:
+                try:
+                    # Stage 1 only (gate = 101 so Stage 2 document downloads are deferred to profile view)
+                    res = await self.process_company(crn, min_gate_threshold=101.0, discovery_source=source_tag)
+                    scr = res.get("screening")
+                    return {
+                        "crn": crn,
+                        "company_name": item.get("company_name"),
+                        "surfaced": bool(res.get("surfaced")),
+                        "indicators": triggered_indicators(scr) if scr else [],
+                        "products": [p["code"] for p in res.get("products", [])],
+                    }
+                except Exception as e:
+                    logger.warning(f"Discovery screen failed for {crn}: {e}")
+                    return {"crn": crn, "company_name": item.get("company_name"), "surfaced": False, "error": str(e)}
+
+        results = await asyncio.gather(*[_screen(i) for i in items if i.get("company_number")])
+        return {
+            "sic_codes": sic_codes,
+            "start_index": start_index,
+            "next_start_index": start_index + len(items),
+            "total_hits": search.get("hits", 0),
+            "screened": len(results),
+            "surfaced": sum(1 for r in results if r.get("surfaced")),
+            "results": results,
+        }
 
 
 # Global singleton instance for application API use
