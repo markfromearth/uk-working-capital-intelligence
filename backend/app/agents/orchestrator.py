@@ -22,6 +22,7 @@ from backend.app.agents.adaptive_investigation import AdaptiveInvestigationAgent
 from backend.app.agents.opportunity_assessment import FinanceOpportunityAgent
 from backend.app.agents.marketing_research import MarketingResearchAgent
 from backend.app.agents.audience_strategy import AudienceStrategyAgent
+from backend.app.agents.campaign_economics import CampaignEconomicsAgent
 from backend.app.agents.independent_verification import IndependentVerificationAgent
 from backend.app.core.crn_normalizer import normalize_uk_crn
 from backend.app.core.logging import logger
@@ -37,6 +38,7 @@ class MultiAgentOrchestrator:
         self.opportunity_agent = FinanceOpportunityAgent()
         self.marketing_agent = MarketingResearchAgent()
         self.strategy_agent = AudienceStrategyAgent()
+        self.economics_agent = CampaignEconomicsAgent()
         self.verification_agent = IndependentVerificationAgent()
 
     async def run_investigation_pipeline(
@@ -167,7 +169,27 @@ class MultiAgentOrchestrator:
         prior_results.append(res_f)
         trace.task_traces.append(res_f)
 
-        # --- STEP 7: Independent Verification (Agent J) ---
+        # --- STEP 7: Campaign Economics & Modeling (Agent G) ---
+        req_g = AgentTaskRequest(
+            correlation_id=cid,
+            target_role=AgentRole.CAMPAIGN_ECONOMICS,
+            crn=norm_crn,
+            budget_limit_gbp=remaining_budget,
+            input_payload={
+                "facility_size_gbp": res_d.output_payload.get("estimated_facility_size_gbp", 350_000.0),
+                "campaign_cost_gbp": 0.0,  # Zero-cost test validation default
+                "target_reach": 1000,
+                "strategy_id": res_f.output_payload.get("primary_recommended_strategy_id"),
+            },
+            provenance_chain=[r.task_id for r in prior_results],
+        )
+        res_g = await self.economics_agent.execute(req_g)
+        accumulated_cost += res_g.cost_incurred_gbp
+        remaining_budget = max(0.0, remaining_budget - res_g.cost_incurred_gbp)
+        prior_results.append(res_g)
+        trace.task_traces.append(res_g)
+
+        # --- STEP 8: Independent Verification (Agent J) ---
         req_j = AgentTaskRequest(
             correlation_id=cid,
             target_role=AgentRole.INDEPENDENT_VERIFICATION,
