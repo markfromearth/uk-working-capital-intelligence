@@ -38,6 +38,7 @@ class WardenPipelineOrchestrator:
         self.scorer = scorer or ProvisionalScorer()
         self.fetcher = fetcher or AccountsFetcher()
         self._dossier_store: Dict[str, TrappedCashDossier] = {}
+        self._screening_store: Dict[str, ScreeningResult] = {}
 
     async def process_company(
         self,
@@ -82,6 +83,7 @@ class WardenPipelineOrchestrator:
             min_gate_threshold=min_gate_threshold,
         )
         screening_res = scorer.score_company(norm_crn, profile, charges, filings)
+        self._screening_store[norm_crn] = screening_res
 
         # Gate Check: Stop here if below qualification gate or knocked out
         if not screening_res.passed_gate:
@@ -228,6 +230,11 @@ class WardenPipelineOrchestrator:
         """Retrieve stored dossier for a company."""
         norm_crn, valid, _ = normalize_uk_crn(crn)
         return self._dossier_store.get(norm_crn if valid and norm_crn else crn)
+
+    def get_screening(self, crn: str) -> Optional[ScreeningResult]:
+        """Retrieve stored Stage 1 screening result and indicator audit trail for a company."""
+        norm_crn, valid, _ = normalize_uk_crn(crn)
+        return self._screening_store.get(norm_crn if valid and norm_crn else crn)
 
 
 # Global singleton instance for application API use

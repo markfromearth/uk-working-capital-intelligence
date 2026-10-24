@@ -110,4 +110,5 @@ class QuantMathEngine:
             commercial_pitch=commercial_pitch,
             refinements=refinements or [],
             primary_sources=sources_list,
+            audit_trail=screening.audit_trail or [],
         )

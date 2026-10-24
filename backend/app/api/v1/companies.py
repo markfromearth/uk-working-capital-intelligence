@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from backend.app.database import get_db
+from backend.app.core.logging import logger
 from backend.app.core.crn_normalizer import normalize_uk_crn
 from backend.app.models.company import CompanyRegistry, CompanyMatchReview
 from backend.app.models.signal import NormalizedSignal
@@ -35,7 +36,7 @@ def list_companies(
     return query.offset(skip).limit(limit).all()
 
 @router.get("/{crn}/profile")
-def get_company_intelligence_profile(crn: str, db: Session = Depends(get_db)):
+async def get_company_intelligence_profile(crn: str, db: Session = Depends(get_db)):
     norm_crn, valid, err = normalize_uk_crn(crn)
     if not valid or not norm_crn:
         raise HTTPException(status_code=400, detail=f"Invalid UK Company Registration Number: {err}")
@@ -77,8 +78,17 @@ def get_company_intelligence_profile(crn: str, db: Session = Depends(get_db)):
     else:
         explanation = None
 
-    # Retrieve qualified Warden dossier if present
+    # Retrieve qualified Warden dossier or screening if present
     warden_dossier = default_pipeline_orchestrator.get_dossier(norm_crn)
+    screening_result = default_pipeline_orchestrator.get_screening(norm_crn)
+
+    if not warden_dossier and not screening_result:
+        try:
+            await default_pipeline_orchestrator.process_company(norm_crn)
+            warden_dossier = default_pipeline_orchestrator.get_dossier(norm_crn)
+            screening_result = default_pipeline_orchestrator.get_screening(norm_crn)
+        except Exception as e:
+            logger.warning(f"On-demand screen during profile fetch for {norm_crn}: {e}")
 
     return {
         "company": {
@@ -95,6 +105,7 @@ def get_company_intelligence_profile(crn: str, db: Session = Depends(get_db)):
             "verified_at": company.verified_at
         },
         "warden_dossier": warden_dossier.model_dump() if warden_dossier else None,
+        "screening_result": screening_result.model_dump() if screening_result else None,
         "score_summary": {
             "score": latest_score.score if latest_score else None,
             "score_band": latest_score.score_band if latest_score else "limited",

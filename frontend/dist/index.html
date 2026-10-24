@@ -451,17 +451,72 @@
           </div>
         </div>
 
-        <!-- Section 1: Stage 1 Statutory Indicators -->
-        <div class="bg-slate-950 p-4 rounded border border-slate-800">
-          <div class="flex items-center justify-between mb-3 border-b border-slate-800 pb-2 font-mono">
-            <h3 class="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-              <span>Stage 1: Companies House Structured Indicators</span>
-            </h3>
-            <span class="text-[10px] text-slate-500">100-Point Dynamic Weighting</span>
+        <!-- Section 1: Detailed 100-Point Score Breakdown & Attribution Matrix -->
+        <div class="bg-slate-950 p-4 rounded-lg border border-slate-800">
+          <div class="flex flex-wrap items-center justify-between mb-3 border-b border-slate-800 pb-2.5 font-mono gap-2">
+            <div>
+              <h3 class="text-xs font-bold text-sky-400 uppercase tracking-wider flex items-center gap-2">
+                <span>100-Point Scoring Matrix &amp; Indicator Attribution Breakdown</span>
+              </h3>
+              <p class="text-[10px] text-slate-400 font-sans mt-0.5">Stage 1 Pre-Gate Indicator Weights (0-100) and Stage 3 Intelligence Refinement Modulations.</p>
+            </div>
+            <div id="modal-gate-badge" class="px-2.5 py-1 rounded text-[10px] font-mono font-bold uppercase bg-slate-800 text-slate-300 border border-slate-700">
+              GATE EVALUATION
+            </div>
           </div>
 
-          <div id="modal-indicators-list" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-            <!-- Indicator cards populated dynamically -->
+          <!-- Score Breakdown Table -->
+          <div class="overflow-x-auto mb-3">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead class="bg-slate-900 text-slate-400 font-mono text-[10px] uppercase">
+                <tr>
+                  <th class="p-2.5">Indicator &amp; Statutory Focus</th>
+                  <th class="p-2.5 text-center">Max Weight</th>
+                  <th class="p-2.5 text-center">Score Awarded</th>
+                  <th class="p-2.5 text-center">Trigger Status</th>
+                  <th class="p-2.5">Statutory Evidence / Audit Notes</th>
+                  <th class="p-2.5 text-right">Primary Evidence</th>
+                </tr>
+              </thead>
+              <tbody id="modal-score-breakdown-tbody" class="divide-y divide-slate-800/80 font-mono text-xs">
+                <!-- Dynamically populated from auditTrail -->
+              </tbody>
+              <tfoot class="bg-slate-900/90 font-mono text-xs border-t-2 border-slate-800">
+                <tr>
+                  <td class="p-2.5 font-bold text-slate-200">STAGE 1 PROVISIONAL SCORE SUBTOTAL</td>
+                  <td class="p-2.5 text-center font-bold text-slate-400">100.0 pts</td>
+                  <td id="modal-breakdown-subtotal-awarded" class="p-2.5 text-center font-bold text-sky-400 text-sm">-- pts</td>
+                  <td id="modal-breakdown-subtotal-gate" class="p-2.5 text-center font-semibold text-slate-300">Min 65.0 Gate</td>
+                  <td colspan="2" class="p-2.5 text-right text-[11px] text-slate-400 font-sans">65.0 threshold required to unlock Stage 2 borrowing base</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <!-- Stage 3 Refinement Adjustments Block -->
+          <div class="pt-3 border-t border-slate-800/80">
+            <div class="flex items-center justify-between mb-2 font-mono">
+              <span class="text-xs font-bold text-indigo-400 uppercase">Stage 3: Post-Gate Intelligence Refinements (+/- Points)</span>
+              <span id="modal-refinement-subtotal" class="text-xs font-bold font-mono text-indigo-400">+0.0 pts delta</span>
+            </div>
+            <div id="modal-adjustments-list" class="space-y-2 font-mono text-xs">
+              <!-- Dynamically populated from refinements -->
+            </div>
+          </div>
+
+          <!-- Final Mathematical Reconciliation Banner -->
+          <div class="mt-3.5 p-3 rounded bg-slate-900 border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
+            <div class="flex items-center gap-3">
+              <span class="text-slate-400">SCORE RECONCILIATION:</span>
+              <span id="recon-prov-score" class="text-slate-200 font-bold">Base: 0.0</span>
+              <span class="text-slate-500">+</span>
+              <span id="recon-refine-delta" class="text-indigo-400 font-bold">Refinements: +0.0</span>
+              <span class="text-slate-500">=</span>
+              <span id="recon-final-score" class="text-sky-400 font-bold text-sm bg-sky-950/80 px-2.5 py-1 rounded border border-sky-500/40">Final Warden Score: 0.0 / 100</span>
+            </div>
+            <button onclick="runModalLiveScreen()" id="btn-modal-rescreen" class="px-2.5 py-1 rounded bg-slate-800 hover:bg-sky-600 text-slate-300 hover:text-white font-mono text-[11px] transition flex items-center gap-1 border border-slate-700">
+              <span>⚡ Re-Calculate Live from Companies House</span>
+            </button>
           </div>
         </div>
 
@@ -498,19 +553,6 @@
                 <div class="border-t border-slate-800 pt-1 flex justify-between"><span class="text-slate-300 font-semibold">Net Liquidity Release:</span> <span id="tc-net-release" class="text-sky-400 font-bold">£--</span></div>
               </div>
             </div>
-          </div>
-        </div>
-
-        <!-- Section 3: Stage 3 Intelligence Refinement Adjustments -->
-        <div id="modal-refinement-section" class="bg-slate-950 p-4 rounded border border-slate-800">
-          <div class="flex items-center justify-between mb-3 border-b border-slate-800 pb-2 font-mono">
-            <h3 class="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
-              <span>Stage 3: Intelligence Refinement &amp; Score Modulation</span>
-            </h3>
-            <span class="text-[10px] text-slate-500">Forensically Justified</span>
-          </div>
-          <div id="modal-adjustments-list" class="space-y-2">
-            <!-- Adjustments populated dynamically -->
           </div>
         </div>
 
@@ -879,6 +921,7 @@
 
         // Check if Warden dossier exists in memory or API
         let dossier = data.warden_dossier;
+        let screening = data.screening_result;
         if (!dossier) {
           try {
             const dRes = await fetch(`/api/v1/warden/prospects/${crn}/dossier`);
@@ -887,13 +930,24 @@
             }
           } catch (e) {}
         }
+        if (!screening) {
+          try {
+            const sRes = await fetch(`/api/v1/warden/prospects/${crn}/screening`);
+            if (sRes.ok) {
+              screening = await sRes.json();
+            }
+          } catch (e) {}
+        }
 
         // Scores
-        const scoreVal = dossier ? dossier.refined_score : (data.score_summary.score || 0.0);
+        const provVal = dossier ? dossier.provisional_score : (screening ? screening.provisional_score : (data.score_summary.score || 0.0));
+        const scoreVal = dossier ? dossier.refined_score : provVal;
+        const refineDelta = dossier ? dossier.score_refinement_delta : 0.0;
+        const passedGate = (dossier !== null) || (screening && screening.passed_gate) || (provVal >= 65.0);
+
         document.getElementById("modal-score-value").textContent = scoreVal.toFixed(1);
-        
-        const provVal = dossier ? dossier.provisional_score : scoreVal;
         document.getElementById("modal-prov-score").innerHTML = `${provVal.toFixed(1)} <span class="text-xs text-slate-500 font-normal">/ 100</span>`;
+        document.getElementById("modal-refine-delta").textContent = `${refineDelta >= 0 ? '+' : ''}${refineDelta.toFixed(1)} pts`;
 
         let bandBadge = "bg-rose-500/20 text-rose-300";
         let bandText = "STRONG";
@@ -904,47 +958,120 @@
         document.getElementById("modal-score-band").textContent = bandText;
         document.getElementById("modal-score-band").className = `px-2 py-0.5 rounded text-[10px] uppercase font-mono ${bandBadge}`;
 
-        // Stage 1 Indicators
-        const indContainer = document.getElementById("modal-indicators-list");
-        if (dossier && dossier.indicators) {
-          const ind = dossier.indicators;
-          indContainer.innerHTML = `
-            <div class="bg-slate-900 p-3 rounded border border-slate-800">
-              <div class="flex items-center justify-between font-mono text-[10px] text-slate-400">
-                <span>WHITE SPACE (BANK CHARGES)</span>
-                <span class="${ind.white_space ? 'text-emerald-400 font-bold' : 'text-slate-500'}">${ind.white_space ? '✓ DETECTED' : 'None'}</span>
-              </div>
-              <div class="text-[11px] text-slate-200 mt-1">${ind.white_space_detail || 'No satisfied high-street debentures in 180-730d window'}</div>
-            </div>
-            <div class="bg-slate-900 p-3 rounded border border-slate-800">
-              <div class="flex items-center justify-between font-mono text-[10px] text-slate-400">
-                <span>REFINANCE WINDOW</span>
-                <span class="${ind.refinancing_window ? 'text-emerald-400 font-bold' : 'text-slate-500'}">${ind.refinancing_window ? '✓ ACTIVE' : 'None'}</span>
-              </div>
-              <div class="text-[11px] text-slate-200 mt-1">${ind.refinancing_window_detail || 'No secondary factor debenture aged 24-48m'}</div>
-            </div>
-            <div class="bg-slate-900 p-3 rounded border border-slate-800">
-              <div class="flex items-center justify-between font-mono text-[10px] text-slate-400">
-                <span>TM01 RESIGNATIONS</span>
-                <span class="${ind.tm01_cluster ? 'text-amber-400 font-bold' : 'text-slate-500'}">${ind.tm01_cluster ? '✓ CLUSTER' : 'Stable'}</span>
-              </div>
-              <div class="text-[11px] text-slate-200 mt-1">${ind.tm01_cluster_detail || 'No recent officer departures'}</div>
-            </div>
-            <div class="bg-slate-900 p-3 rounded border border-slate-800">
-              <div class="flex items-center justify-between font-mono text-[10px] text-slate-400">
-                <span>B2B SECTOR VALIDATION</span>
-                <span class="${ind.is_b2b_eligible ? 'text-emerald-400 font-bold' : 'text-rose-400'}">${ind.is_b2b_eligible ? '✓ ELIGIBLE' : 'Excluded'}</span>
-              </div>
-              <div class="text-[11px] text-slate-200 mt-1">${ind.b2b_sector_detail || 'Verified B2B trade sector code'}</div>
-            </div>
-          `;
+        // Gate Qualification Badge
+        const gateBadgeEl = document.getElementById("modal-gate-badge");
+        if (gateBadgeEl) {
+          if (passedGate) {
+            gateBadgeEl.textContent = "✓ PASSED 65.0 QUALIFICATION GATE";
+            gateBadgeEl.className = "px-2.5 py-1 rounded text-[10px] font-mono font-bold uppercase bg-emerald-500/20 text-emerald-400 border border-emerald-500/40";
+          } else {
+            gateBadgeEl.textContent = "⚠ BELOW 65.0 GATE THRESHOLD";
+            gateBadgeEl.className = "px-2.5 py-1 rounded text-[10px] font-mono font-bold uppercase bg-amber-500/20 text-amber-300 border border-amber-500/40";
+          }
+        }
+
+        // Section 1: Detailed Indicator Score Breakdown (0-100 Matrix)
+        const auditTrail = (dossier && dossier.audit_trail && dossier.audit_trail.length > 0)
+          ? dossier.audit_trail
+          : (screening && screening.audit_trail && screening.audit_trail.length > 0 ? screening.audit_trail : []);
+
+        const scoreTbody = document.getElementById("modal-score-breakdown-tbody");
+        if (auditTrail.length > 0) {
+          let sumAwarded = 0;
+          scoreTbody.innerHTML = auditTrail.map(a => {
+            sumAwarded += (a.awarded || 0);
+
+            let indTitle = a.indicator;
+            if (a.indicator === 'white_space') indTitle = "1. White Space (Satisfied High-Street Bank Debentures)";
+            else if (a.indicator === 'refinance_window') indTitle = "2. Refinancing Window (Secondary Factor 24–48m Debentures)";
+            else if (a.indicator === 'tm01_cluster') indTitle = "3. Officer TM01 Resignation Cluster (Leadership Turbulence)";
+            else if (a.indicator === 'b2b_sector_fit') indTitle = "4. B2B Trade SIC Sector Eligibility";
+            else if (a.indicator === 'admin_delinquency') indTitle = "5. Filing Compliance & Gazette Strike-Off Risk";
+
+            let trigBadge = a.triggered 
+              ? `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">✓ TRIGGERED</span>`
+              : `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-800 text-slate-400">UNTRIGGERED</span>`;
+
+            let evLink = '–';
+            if (a.primary_source && a.primary_source.uri) {
+              evLink = `<a href="${a.primary_source.uri}" target="_blank" class="text-sky-400 hover:text-sky-300 text-[11px] flex items-center justify-end gap-1 font-semibold">
+                <span>View CH</span>
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+              </a>`;
+            }
+
+            const pct = a.weight > 0 ? Math.min(100, Math.round((a.awarded / a.weight) * 100)) : 0;
+
+            return `
+              <tr class="hover:bg-slate-900/60 transition">
+                <td class="p-2.5 font-semibold text-slate-100">
+                  <div>${indTitle}</div>
+                  <div class="text-[10px] text-slate-500 font-sans mt-0.5">${a.indicator.toUpperCase()}</div>
+                </td>
+                <td class="p-2.5 text-center text-slate-400 font-bold">${a.weight.toFixed(1)} pts</td>
+                <td class="p-2.5 text-center">
+                  <span class="font-bold text-sm ${a.awarded > 0 ? 'text-emerald-400' : 'text-slate-500'}">
+                    ${a.awarded > 0 ? '+' : ''}${a.awarded.toFixed(1)} pts
+                  </span>
+                  <div class="w-16 bg-slate-800 h-1 rounded-full overflow-hidden mx-auto mt-1">
+                    <div class="${a.awarded > 0 ? 'bg-emerald-500' : 'bg-slate-700'} h-full" style="width: ${pct}%"></div>
+                  </div>
+                </td>
+                <td class="p-2.5 text-center">${trigBadge}</td>
+                <td class="p-2.5 font-sans text-slate-300 text-[11px] max-w-md">${a.evidence || 'No evidence recorded.'}</td>
+                <td class="p-2.5 text-right whitespace-nowrap">${evLink}</td>
+              </tr>
+            `;
+          }).join('');
+
+          document.getElementById("modal-breakdown-subtotal-awarded").textContent = `${sumAwarded.toFixed(1)} / 100.0 pts`;
+          document.getElementById("modal-breakdown-subtotal-gate").className = sumAwarded >= 65.0 
+            ? "p-2.5 text-center font-bold text-emerald-400" 
+            : "p-2.5 text-center font-bold text-amber-400";
+          document.getElementById("modal-breakdown-subtotal-gate").textContent = sumAwarded >= 65.0 ? "✓ GATE PASSED" : "BELOW 65.0 GATE";
         } else {
-          indContainer.innerHTML = `
-            <div class="bg-slate-900 p-3 rounded border border-slate-800 col-span-2 text-slate-400 font-mono text-[11px]">
-              Click "Re-Screen" on this entity to run full multi-stage Companies House extraction and populate structured indicators.
+          scoreTbody.innerHTML = `
+            <tr>
+              <td colspan="6" class="p-4 text-center text-slate-400 font-mono text-xs">
+                No score breakdown currently cached. Click "Re-Calculate Live from Companies House" below to execute real-time multi-stage screening.
+              </td>
+            </tr>
+          `;
+          document.getElementById("modal-breakdown-subtotal-awarded").textContent = `${provVal.toFixed(1)} pts`;
+        }
+
+        // Section 3: Stage 3 Intelligence Refinement Score Adjustments
+        const adjContainer = document.getElementById("modal-adjustments-list");
+        const refinements = (dossier && dossier.refinements && dossier.refinements.length > 0) ? dossier.refinements : [];
+        if (refinements.length > 0) {
+          document.getElementById("modal-refinement-subtotal").textContent = `${refineDelta >= 0 ? '+' : ''}${refineDelta.toFixed(1)} pts delta`;
+          adjContainer.innerHTML = refinements.map(a => `
+            <div class="bg-slate-900 p-2.5 rounded border border-slate-800 flex items-start justify-between font-mono">
+              <div>
+                <div class="font-bold text-slate-200 text-xs flex items-center gap-2">
+                  <span>${a.metric_name}</span>
+                  <span class="text-[10px] text-slate-500">${a.direction}</span>
+                </div>
+                <div class="text-[11px] text-slate-400 mt-0.5 font-sans">${a.justification}</div>
+              </div>
+              <span class="px-2 py-0.5 rounded text-xs font-bold ${a.delta_points >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}">
+                ${a.delta_points >= 0 ? '+' : ''}${a.delta_points.toFixed(1)} pts
+              </span>
+            </div>
+          `).join('');
+        } else {
+          document.getElementById("modal-refinement-subtotal").textContent = "+0.0 pts delta";
+          adjContainer.innerHTML = `
+            <div class="text-slate-500 font-mono text-xs p-2.5 text-center bg-slate-900/50 rounded border border-slate-800/80">
+              ${passedGate ? 'Stage 3 evaluated with neutral 0.0 delta (baseline portfolio posture maintained).' : 'Stage 3 bypassed because Stage 1 score is below the 65.0 qualification gate.'}
             </div>
           `;
         }
+
+        // Mathematical Reconciliation Banner
+        document.getElementById("recon-prov-score").textContent = `Base: ${provVal.toFixed(1)} pts`;
+        document.getElementById("recon-refine-delta").textContent = `Refinements: ${refineDelta >= 0 ? '+' : ''}${refineDelta.toFixed(1)} pts`;
+        document.getElementById("recon-final-score").textContent = `Final Warden Score: ${scoreVal.toFixed(1)} / 100`;
 
         // Stage 2 Quant Extraction & Trapped Cash
         if (dossier && dossier.balance_sheet && dossier.trapped_cash) {
@@ -976,30 +1103,6 @@
           document.getElementById("tc-eligible-debts").textContent = "£0";
           document.getElementById("tc-facility").textContent = "£0";
           document.getElementById("tc-net-release").textContent = "£0";
-        }
-
-        // Stage 3 Refinements
-        const adjContainer = document.getElementById("modal-adjustments-list");
-        if (dossier && dossier.score_adjustments && dossier.score_adjustments.length > 0) {
-          const delta = dossier.refined_score - dossier.provisional_score;
-          document.getElementById("modal-refine-delta").textContent = `${delta >= 0 ? '+' : ''}${delta.toFixed(1)} pts`;
-
-          adjContainer.innerHTML = dossier.score_adjustments.map(a => `
-            <div class="bg-slate-900 p-2.5 rounded border border-slate-800 flex items-start justify-between font-mono">
-              <div>
-                <div class="font-bold text-slate-200 text-xs">${a.feature_name}</div>
-                <div class="text-[11px] text-slate-400 mt-0.5 font-sans">${a.justification}</div>
-              </div>
-              <span class="px-2 py-0.5 rounded text-xs font-bold ${a.points >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}">
-                ${a.points >= 0 ? '+' : ''}${a.points.toFixed(1)} pts
-              </span>
-            </div>
-          `).join('');
-        } else {
-          document.getElementById("modal-refine-delta").textContent = "+0.0 pts";
-          adjContainer.innerHTML = `
-            <div class="text-slate-500 font-mono text-xs p-2 text-center">No Stage 3 refinement adjustments applied for this profile.</div>
-          `;
         }
 
         // Primary Sources
@@ -1081,6 +1184,38 @@
       } catch (e) {
         console.error("Failed to submit review", e);
         showToast("Network error submitting review", "error");
+      }
+    }
+
+    async function runModalLiveScreen() {
+      if (!currentCrn) return;
+      const btn = document.getElementById("btn-modal-rescreen");
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span>↻ Screening Live CH...</span>`;
+      }
+      try {
+        appendStreamLog("MODAL_SCREEN", `Triggering on-demand live screen for CRN ${currentCrn}...`, "text-sky-400");
+        const res = await fetch(`/api/v1/warden/screen/${currentCrn}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({})
+        });
+        const result = await res.json();
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = `<span>⚡ Re-Calculate Live from Companies House</span>`;
+        }
+        showToast(`Live score recomputed from Companies House`, "success");
+        await openProfile(currentCrn);
+        await refreshData();
+      } catch (e) {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = `<span>⚡ Re-Calculate Live from Companies House</span>`;
+        }
+        console.error("Error rescreening in modal", e);
+        showToast("Re-screening error", "error");
       }
     }
 

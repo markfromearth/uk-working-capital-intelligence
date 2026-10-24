@@ -90,3 +90,4 @@ class TrappedCashDossier(BaseModel):
     commercial_pitch: str
     refinements: List[ScoreRefinementAdjustment] = Field(default_factory=list)
     primary_sources: List[PrimarySourceReference] = Field(default_factory=list)
+    audit_trail: List[IndicatorBreakdown] = Field(default_factory=list)

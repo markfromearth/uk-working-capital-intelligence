@@ -72,6 +72,18 @@ def get_prospect_dossier(crn: str):
     return dossier
 
 
+@router.get("/prospects/{crn}/screening", response_model=ScreeningResult)
+def get_prospect_screening(crn: str):
+    """Retrieve Stage 1 structured screening result and indicator audit trail for a company."""
+    screening = default_pipeline_orchestrator.get_screening(crn)
+    if not screening:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No screening record found for CRN {crn}. Run /warden/screen/{crn} first.",
+        )
+    return screening
+
+
 @router.get("/prospects/{crn}/primary-sources", response_model=List[PrimarySourceReference])
 def get_prospect_primary_sources(crn: str):
     """
