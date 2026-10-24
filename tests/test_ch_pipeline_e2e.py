@@ -11,6 +11,7 @@ from backend.app.services.pipeline_orchestrator import (
     default_pipeline_orchestrator,
 )
 from backend.app.providers.companies_house_ch import CompaniesHouseCHClient
+from backend.app.services.accounts_fetcher import AccountsFetcher
 
 
 @pytest.fixture
