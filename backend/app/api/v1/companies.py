@@ -21,7 +21,7 @@ from backend.app.services.pipeline_orchestrator import default_pipeline_orchestr
 router = APIRouter(prefix="/companies", tags=["Companies & Intelligence Profiles"])
 
 @router.get("", response_model=List[CompanyOut])
-def list_companies(
+async def list_companies(
     skip: int = 0,
     limit: int = 50,
     status: Optional[str] = None,
@@ -41,6 +41,15 @@ def list_companies(
         out = CompanyOut.model_validate(c)
         dossier = default_pipeline_orchestrator.get_dossier(c.crn)
         screening = default_pipeline_orchestrator.get_screening(c.crn)
+
+        # If in-memory stores are cold on serverless container start, run genuine screen on-demand
+        if not dossier and not screening:
+            try:
+                await default_pipeline_orchestrator.process_company(c.crn, min_gate_threshold=0.0)
+                dossier = default_pipeline_orchestrator.get_dossier(c.crn)
+                screening = default_pipeline_orchestrator.get_screening(c.crn)
+            except Exception as e:
+                logger.warning(f"Auto-screening during company listing failed for {c.crn}: {e}")
         
         latest_score = db.query(LiquidityScoreRecord).filter(
             LiquidityScoreRecord.crn == c.crn
@@ -48,26 +57,28 @@ def list_companies(
 
         if dossier:
             out.liquidity_strain_score = dossier.refined_score
-            out.score_band = "HOT / A-Tier" if dossier.refined_score >= 80 else ("WARM / B-Tier" if dossier.refined_score >= 65 else "NURTURE / C-Tier")
+            out.score_band = "HOT / A-Tier" if dossier.refined_score >= 70 else ("WARM / B-Tier" if dossier.refined_score >= 40 else "NURTURE / C-Tier")
             out.estimated_facility_size = dossier.indicative_facility_80pct
             out.eligible_book_debts = dossier.eligible_book_debts
             if dossier.balance_sheet and dossier.balance_sheet.current_assets_total > 0:
                 out.debtors_to_assets_ratio = int((dossier.eligible_book_debts / dossier.balance_sheet.current_assets_total) * 100)
-            out.primary_signals_summary = dossier.commercial_pitch[:120] + "..." if dossier.commercial_pitch else "Verified statutory profile"
-            out.working_capital_risk = "None / Mild"
+            out.primary_signals_summary = dossier.commercial_pitch if dossier.commercial_pitch else "Verified statutory profile"
+            out.has_white_space = any(a.indicator == 'white_space' and a.triggered for a in dossier.audit_trail)
+            out.working_capital_risk = "Surplus Cushion" if dossier.trapped_cash_release > 0 else "None / Mild"
         elif screening:
             out.liquidity_strain_score = screening.provisional_score
-            out.score_band = "HOT / A-Tier" if screening.provisional_score >= 80 else ("WARM / B-Tier" if screening.provisional_score >= 65 else "NURTURE / C-Tier")
+            out.score_band = "HOT / A-Tier" if screening.provisional_score >= 70 else ("WARM / B-Tier" if screening.provisional_score >= 40 else "NURTURE / C-Tier")
             out.working_capital_risk = screening.knockout_reason or ("None / Mild" if screening.passed_gate else "Below Gate")
+            out.primary_signals_summary = screening.knockout_reason or "Provisional screening complete"
         elif latest_score:
             out.liquidity_strain_score = latest_score.score
             out.score_band = latest_score.score_band
             out.primary_signals_summary = latest_score.ai_summary
             out.working_capital_risk = "None / Mild"
         else:
-            out.liquidity_strain_score = 75.0
-            out.score_band = "WARM / B-Tier"
-            out.working_capital_risk = "None / Mild"
+            out.liquidity_strain_score = 0.0
+            out.score_band = "Unscreened"
+            out.working_capital_risk = "Pending Statutory Screening"
 
         results.append(out)
 
