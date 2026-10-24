@@ -22,6 +22,7 @@ from backend.app.api.v1.system import router as system_router
 from backend.app.api.v1.adaptive import router as adaptive_router
 from backend.app.api.v1.decision_makers import router as decision_makers_router
 from backend.app.api.v1.audiences import router as audiences_router
+from backend.app.api.v1.warden import router as warden_router
 
 from contextlib import asynccontextmanager
 
@@ -99,6 +100,7 @@ app.include_router(system_router, prefix=settings.API_V1_STR)
 app.include_router(adaptive_router, prefix=settings.API_V1_STR)
 app.include_router(decision_makers_router, prefix=settings.API_V1_STR)
 app.include_router(audiences_router, prefix=settings.API_V1_STR)
+app.include_router(warden_router, prefix=settings.API_V1_STR)
 
 # Mount frontend static directory if exists
 frontend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "frontend", "dist")
