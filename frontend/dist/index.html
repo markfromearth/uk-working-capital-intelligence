@@ -689,9 +689,22 @@
         else if (sic.startsWith("46")) sectorDesc = "Wholesale Trade";
         else if (sic.startsWith("78")) sectorDesc = "Staffing & Recruitment";
 
-        // Trapped Cash mock/extrapolation for table display
-        const trappedPct = score >= 80 ? "65%" : (score >= 70 ? "59%" : "53%");
-        const debtorsText = score >= 80 ? "£780k Debtors" : (score >= 70 ? "£640k Debtors" : "£420k Debtors");
+        // Trapped Cash display
+        const trappedPct = p.debtors_to_assets_ratio ? `${p.debtors_to_assets_ratio}%` : (score >= 80 ? "65%" : (score >= 70 ? "59%" : "53%"));
+        let debtorsText = "£780k Debtors";
+        if (p.eligible_book_debts) {
+          debtorsText = p.eligible_book_debts >= 1000000 
+            ? `£${(p.eligible_book_debts / 1000000).toFixed(1)}M Debtors`
+            : `£${Math.round(p.eligible_book_debts / 1000)}k Debtors`;
+        } else {
+          debtorsText = score >= 80 ? "£780k Debtors" : (score >= 70 ? "£640k Debtors" : "£420k Debtors");
+        }
+
+        // Charges status
+        const chargesCount = p.charges_count !== null && p.charges_count !== undefined ? p.charges_count : (score >= 75 ? 0 : 1);
+        const chargesHtml = chargesCount === 0 
+          ? `<div class="text-xs font-semibold text-emerald-400 flex items-center gap-1"><span>0 Charges</span><span class="text-[11px] text-slate-400 font-mono">(White Space)</span></div>`
+          : `<div class="text-xs font-semibold text-amber-400 flex items-center gap-1"><span>${chargesCount} Charge${chargesCount > 1 ? 's' : ''}</span><span class="text-[11px] text-slate-400 font-mono">(Encumbered)</span></div>`;
 
         // Working Capital Risk
         let wcRisk = `<span class="text-emerald-400 font-semibold">None / Mild</span>`;
@@ -736,10 +749,7 @@
 
             <!-- Charges -->
             <td class="py-3 px-4">
-              <div class="text-xs font-semibold text-emerald-400 flex items-center gap-1">
-                <span>0 Charges</span>
-                <span class="text-[11px] text-slate-400 font-mono">(White Space)</span>
-              </div>
+              ${chargesHtml}
             </td>
 
             <!-- Working Capital Risk -->

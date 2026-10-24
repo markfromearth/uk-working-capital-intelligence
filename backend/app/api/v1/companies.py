@@ -28,12 +28,50 @@ def list_companies(
     search: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
-    query = db.query(CompanyRegistry)
+    query = db.query(CompanyRegistry).filter(CompanyRegistry.is_synthetic == 0)
     if status:
         query = query.filter(CompanyRegistry.company_status == status)
     if search:
         query = query.filter(CompanyRegistry.company_name.ilike(f"%{search}%") | CompanyRegistry.crn.ilike(f"%{search}%"))
-    return query.offset(skip).limit(limit).all()
+    
+    companies = query.offset(skip).limit(limit).all()
+    results = []
+
+    for c in companies:
+        out = CompanyOut.model_validate(c)
+        dossier = default_pipeline_orchestrator.get_dossier(c.crn)
+        screening = default_pipeline_orchestrator.get_screening(c.crn)
+        
+        latest_score = db.query(LiquidityScoreRecord).filter(
+            LiquidityScoreRecord.crn == c.crn
+        ).order_by(LiquidityScoreRecord.scored_at.desc()).first()
+
+        if dossier:
+            out.liquidity_strain_score = dossier.refined_score
+            out.score_band = "HOT / A-Tier" if dossier.refined_score >= 80 else ("WARM / B-Tier" if dossier.refined_score >= 65 else "NURTURE / C-Tier")
+            out.estimated_facility_size = dossier.indicative_facility_80pct
+            out.eligible_book_debts = dossier.eligible_book_debts
+            if dossier.balance_sheet and dossier.balance_sheet.current_assets_total > 0:
+                out.debtors_to_assets_ratio = int((dossier.eligible_book_debts / dossier.balance_sheet.current_assets_total) * 100)
+            out.primary_signals_summary = dossier.commercial_pitch[:120] + "..." if dossier.commercial_pitch else "Verified statutory profile"
+            out.working_capital_risk = "None / Mild"
+        elif screening:
+            out.liquidity_strain_score = screening.provisional_score
+            out.score_band = "HOT / A-Tier" if screening.provisional_score >= 80 else ("WARM / B-Tier" if screening.provisional_score >= 65 else "NURTURE / C-Tier")
+            out.working_capital_risk = screening.knockout_reason or ("None / Mild" if screening.passed_gate else "Below Gate")
+        elif latest_score:
+            out.liquidity_strain_score = latest_score.score
+            out.score_band = latest_score.score_band
+            out.primary_signals_summary = latest_score.ai_summary
+            out.working_capital_risk = "None / Mild"
+        else:
+            out.liquidity_strain_score = 75.0
+            out.score_band = "WARM / B-Tier"
+            out.working_capital_risk = "None / Mild"
+
+        results.append(out)
+
+    return results
 
 @router.get("/{crn}")
 @router.get("/{crn}/profile")

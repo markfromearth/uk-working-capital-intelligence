@@ -21,6 +21,15 @@ class CompanyOut(CompanyBase):
     verified_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
+    liquidity_strain_score: Optional[float] = None
+    score_band: Optional[str] = None
+    primary_signals_summary: Optional[str] = None
+    estimated_facility_size: Optional[float] = None
+    eligible_book_debts: Optional[float] = None
+    debtors_to_assets_ratio: Optional[int] = None
+    charges_count: Optional[int] = None
+    has_white_space: Optional[bool] = None
+    working_capital_risk: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
