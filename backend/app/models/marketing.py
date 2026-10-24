@@ -47,3 +47,36 @@ class MarketingChannelCandidate(Base):
     source_reference = Column(Text, nullable=False)
     created_at = Column(DateTime, default=utcnow)
     last_verified_at = Column(DateTime, default=utcnow)
+
+
+class CampaignTrackingRecord(Base):
+    __tablename__ = "campaign_tracking_records"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    campaign_id = Column(String(50), unique=True, nullable=False, index=True)
+    strategy_id = Column(String(50), nullable=True, index=True)
+    crn = Column(String(12), nullable=True, index=True)
+    channel_name = Column(String(255), nullable=False)
+    channel_type = Column(String(50), nullable=False)
+    content_format = Column(String(50), nullable=False)
+    utm_campaign = Column(String(100), nullable=False)
+    utm_source = Column(String(100), nullable=False)
+    utm_medium = Column(String(100), nullable=False)
+    budget_gbp = Column(Float, default=0.0)
+    status = Column(String(50), default="ACTIVE")
+    created_at = Column(DateTime, default=utcnow)
+
+
+class CampaignOutcomeEvent(Base):
+    __tablename__ = "campaign_outcome_events"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    campaign_id = Column(String(50), nullable=False, index=True)
+    event_type = Column(String(50), nullable=False, index=True)  # IMPRESSION, CLICK, QUALIFIED_ENQUIRY, APPLICATION, FUNDED_DEAL
+    crn = Column(String(12), nullable=True, index=True)
+    funded_amount_gbp = Column(Float, default=0.0)
+    realized_commission_gbp = Column(Float, default=0.0)
+    event_timestamp = Column(DateTime, nullable=False, default=utcnow)
+    source_reference = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=utcnow)
+
