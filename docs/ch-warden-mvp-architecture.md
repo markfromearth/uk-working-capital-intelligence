@@ -3,7 +3,12 @@
 ## 1. Executive Summary & Problem Scope
 The **Invoice Finance Warden (CH-Only MVP)** transforms raw, public Companies House (CH) statutory data into qualified, pre-sized commercial invoice finance leads. It eliminates manual searches through mortgage registers, filing histories, and PDF balance sheets.
 
-The MVP focuses on **Stage 1 (Point 1: Structured Screening & Provisional Scoring)** and **Stage 2 (Point 4: Dual-Path Accounts Extraction & Trapped Cash Sizing)**.
+The Warden focuses specifically on **surfacing key indicators that an invoice finance service may be of value and interest to a company within the short to mid term** (current financial year or near future).
+
+The operational pipeline consists of:
+1. **Stage 1 (Point 1: Structured Screening & Provisional Scoring)**: Rapid filtering, White Space/Refinancing trigger detection, and gatekeeper scoring.
+2. **Stage 2 (Point 4: Dual-Path Accounts Extraction & Trapped Cash Sizing)**: Deterministic iXBRL + Vision PDF extraction, math validation, and borrowing base calculation.
+3. **Stage 3 (Post-Gate Handoff: Intelligence Refinement & Provenance Agent)**: Deep-dive score refinement adjusting the probability score up or down based on additional indicator metrics, business insights, reports, and news/filing context, while ensuring **all primary sources of indicators are directly retrievable**.
 
 ---
 
@@ -14,6 +19,7 @@ The MVP focuses on **Stage 1 (Point 1: Structured Screening & Provisional Scorin
                         • REST API (Profiles, Charges, Filings, Officers)
                         • Document API (Accounts XHTML & Scanned PDFs)
                         • Streaming API (Real-time Filings/Charges Stream)
+                        • Gazette / Regulatory Public Notices
                                       │
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -21,7 +27,7 @@ The MVP focuses on **Stage 1 (Point 1: Structured Screening & Provisional Scorin
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ 1. Canonical CRN Normalizer (SC, NI, OC support)                            │
 │ 2. CompaniesHouseCHClient: Token-bucket rate limiter (1.8 req/sec max)      │
-│ 3. Indicator Extraction Engine:                                             │
+│ 3. Indicator Extraction Engine (Short-to-Mid Term Value Triggers):          │
 │    • B2B Sector Eligibility (SIC codes: Manufacturing, Wholesale, Transport)│
 │    • White Space Detection (Legacy bank charge satisfied, book debts free)   │
 │    • Refinancing Window Detection (Secondary funder debenture aged 24-48m)  │
@@ -29,6 +35,7 @@ The MVP focuses on **Stage 1 (Point 1: Structured Screening & Provisional Scorin
 │    • Administrative Delinquency (Overdue accounts/CS01)                     │
 │ 4. Hard Knockout Evaluator (GAZ1 strike-off, active liquidation)            │
 │ 5. Dynamic 100-Point Provisional Scorer (Configurable weights & archetypes) │
+│ 6. Primary Source Tagging: Every indicator captures canonical source URI.   │
 └─────────────────────────────────────┬───────────────────────────────────────┘
                                       │
                          [ Provisional Score >= 65.0? ]
@@ -52,15 +59,41 @@ The MVP focuses on **Stage 1 (Point 1: Structured Screening & Provisional Scorin
 │ 5. Trapped Cash & Borrowing Base Calculation:                               │
 │    • Eligible Book Debts = Debtors (or sector-weighted Current Assets)      │
 │    • Indicative Facility = Debtors * 80% Advance Rate                       │
-│    • Formulates commercial outreach rationale & sales pitch                 │
+│    • Primary Source Tagging: Exact statutory document link & page metadata. │
 └─────────────────────────────────────┬───────────────────────────────────────┘
                                       │
                                       ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ LEAD DISCOVERY DOSSIER & REST API SURFACE                                   │
+│ STAGE 3: POST-GATE HANDOFF — THE INTELLIGENCE REFINEMENT & PROVENANCE AGENT  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Indicated businesses are handed off to this agent to refine the probability │
+│ score to accurately indicate short-to-mid term financing potential:         │
+│                                                                             │
+│ 1. Surfacing Additional Indicator Metrics:                                  │
+│    • Historical Trading Seasoning: Company longevity & stability factor.    │
+│    • Working Capital Velocity: Ratio of Debtors to Creditors (< 1yr).       │
+│    • Director Network Track Record: Number of active/dissolved co-entities. │
+│ 2. Contextual Business Insights, Reports & Regulatory Notices:              │
+│    • Cross-company directorship signals (serial directors in B2B).          │
+│    • Published notices, gazette filings, and industry trend reports.        │
+│ 3. Justified Probability Score Refinement (Up or Down):                     │
+│    • Upward Adjustments (+pts): High debtor velocity, seasoned trading,     │
+│      unbroken filing cadence, growing assets.                               │
+│    • Downward Adjustments (-pts): High creditor overhang, recent debtor     │
+│      contraction, excessive director churn.                                 │
+│ 4. Retrievable Primary Sources:                                             │
+│    • NON-NEGOTIABLE PROVENANCE: Every indicator, adjustment, and insight    │
+│      contains retrievable primary source links (Companies House API URIs,   │
+│      charge codes, document IDs, filing transaction IDs, Gazette notices).  │
+└─────────────────────────────────────┬───────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ REFINED LEAD DISCOVERY DOSSIER & REST API SURFACE                           │
 │ • POST /api/v1/warden/screen/{crn}                                          │
 │ • GET  /api/v1/warden/prospects                                             │
 │ • GET  /api/v1/warden/prospects/{crn}/dossier                               │
+│ • GET  /api/v1/warden/prospects/{crn}/primary-sources                       │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -85,12 +118,31 @@ class LendingArchetype(str, Enum):
     PRIME_INVOICE_DISCOUNTING = "PRIME_INVOICE_DISCOUNTING"
     TURNAROUND_SPECIAL_SITUATIONS = "TURNAROUND_SPECIAL_SITUATIONS"
 
+class PrimarySourceReference(BaseModel):
+    """Retrievable primary evidence source."""
+    source_type: str  # "COMPANIES_HOUSE_CHARGES", "COMPANIES_HOUSE_FILING", "ACCOUNTS_DOCUMENT", "GAZETTE_NOTICE", "PUBLIC_REPORT"
+    source_id: str
+    title: str
+    uri: str
+    retrieval_method: str  # "REST_API", "DOCUMENT_API", "PUBLIC_WEB"
+    published_date: Optional[str] = None
+    excerpt: Optional[str] = None
+
+class ScoreRefinementAdjustment(BaseModel):
+    """Detailed justification for an increase or decrease in probability score."""
+    metric_name: str
+    delta_points: float  # Positive for increase, negative for decrease
+    direction: str  # "INCREASE" or "DECREASE"
+    justification: str
+    primary_sources: List[PrimarySourceReference] = Field(default_factory=list)
+
 class IndicatorBreakdown(BaseModel):
     indicator: str
     weight: float
     awarded: float
     triggered: bool
     evidence: str
+    primary_source: Optional[PrimarySourceReference] = None
 
 class ScreeningResult(BaseModel):
     crn: str
@@ -101,64 +153,57 @@ class ScreeningResult(BaseModel):
     passed_gate: bool
     knockout_applied: bool
     knockout_reason: Optional[str] = None
-    audit_trail: List[IndicatorBreakdown]
+    audit_trail: List[IndicatorBreakdown] = Field(default_factory=list)
+    primary_sources: List[PrimarySourceReference] = Field(default_factory=list)
 
 class BalanceSheetData(BaseModel):
     extraction_path: str  # "IXBRL" or "VISION_PDF"
     accounting_framework: str  # "FRS_105" or "FRS_102"
-    period_end_date: Optional[str]
+    period_end_date: Optional[str] = None
     current_assets_total: float
-    debtors: Optional[float]
-    cash_at_bank: Optional[float]
+    debtors: Optional[float] = None
+    cash_at_bank: Optional[float] = None
     creditors_due_within_one_year: float
     net_current_assets: float
     is_arithmetic_valid: bool
-    rounding_variance: float
+    rounding_variance: float = 0.0
+    primary_source: Optional[PrimarySourceReference] = None
 
 class TrappedCashDossier(BaseModel):
     crn: str
     company_name: str
     provisional_score: float
+    refined_score: float
+    score_refinement_delta: float
     balance_sheet: BalanceSheetData
     eligible_book_debts: float
     indicative_facility_80pct: float
     trapped_cash_release: float
     commercial_pitch: str
+    refinements: List[ScoreRefinementAdjustment] = Field(default_factory=list)
+    primary_sources: List[PrimarySourceReference] = Field(default_factory=list)
 ```
 
 ---
 
-## 4. Indicator Mathematical Formulas & Temporal Decay
+## 4. Retrievable Primary Sources & Score Refinement Engine
 
-### 4.1 "White Space" (Unencumbered Book Debts)
-Triggered when an entity has previously granted a floating charge/debenture to a High Street Bank, which has been satisfied with no new debenture registered.
-$$\text{Age} = \text{Current Date} - \text{Latest Charge Satisfaction Date (days)}$$
-$$\text{Eligibility Window}: 180 \le \text{Age} \le 730$$
-$$\text{Score} = \text{Base Weight} \times e^{-0.693 \times (\text{Age} - 180) / 365}$$
+### 4.1 Primary Source Retrieval Protocol
+Every single score calculation, whether from Stage 1 (Charges, Filings, SIC) or Stage 2 (Accounts) or Stage 3 (Refinement), binds to a `PrimarySourceReference` containing:
+- `source_type`: Category of the statutory record.
+- `source_id`: Specific filing transaction ID, charge code, or document hash.
+- `uri`: Direct canonical endpoint or web link (e.g. `https://find-and-update.company-information.service.gov.uk/company/{crn}/charges/{charge_id}`).
+- `excerpt`: The exact underlying text or numerical data extracted.
 
-### 4.2 "Refinancing Window" (Subprime Displacement)
-Triggered when an entity has an active charge with a `SECONDARY_INVOICE_FINANCIER` or `ALTERNATIVE_CHALLENGER`:
-$$\text{Charge Age Months} = \frac{\text{Current Date} - \text{Charge Creation Date}}{30.44}$$
-$$\text{Active Window}: 24 \le \text{Charge Age Months} \le 48$$
-During this window, borrowers have seasoned their credit and are prime candidates to refinance from 3–5% over base to prime rates (1.5–2.5% over base).
+### 4.2 Score Refinement Mechanics
+The post-gate **Intelligence Refinement Agent** takes the provisional score and modulates it up or down:
+- **Upward Refinements (+pts)**:
+  - Strong Debtor-to-Creditor Cover ($\text{Debtors} / \text{Creditors} > 1.4$): $+5.0$ pts.
+  - Mature B2B Trading Stability ($> 5$ years continuous active incorporation with no gazette strikes): $+5.0$ pts.
+  - Favorable Working Capital Velocity: $+3.0$ pts.
+- **Downward Refinements (-pts)**:
+  - High Creditor Overhang ($\text{Creditors} > \text{Current Assets}$): $-8.0$ pts.
+  - Recent Director Resignation Turbulence (TM01 in preceding quarter): $-5.0$ pts.
+  - Accounts filing near statutory delinquency deadline: $-3.0$ pts.
 
-### 4.3 "TM01 Resignation Clusters"
-$$\text{TM01 Count in 90 Days} \ge 2 \implies \text{Active Cluster Triggered}$$
-
-### 4.4 "Administrative Delinquency vs Hard Knockouts"
-- **Overdue Accounts / Confirmation Statement**: Mild operational stress (+10 points for Turnaround profile; flagged as monitoring for Prime).
-- **First Gazette Notice (`GAZ1`)**:
-  - `PRIME_INVOICE_DISCOUNTING`: Hard knockout ($\text{Score} \to 0$, `passed_gate = False`).
-  - `TURNAROUND_SPECIAL_SITUATIONS`: Permitted, high risk indicator.
-
----
-
-## 5. Risk & Mitigation Strategy
-
-| Failure Mode | Root Cause | Architectural Mitigation |
-| :--- | :--- | :--- |
-| **S3 400 Bad Request** | Auth header forwarded across redirect | Custom `httpx.AsyncClient` redirect hook removing `Authorization` on S3 domains |
-| **CH 429 Rate Limit** | Over-calling CH REST API | In-memory token-bucket limiter (1.8 req/sec) + jittered exponential backoff |
-| **FRS 105 Missing Debtors** | Micro-entity accounts only state Current Assets | Sector-specific fallback calculation with explicit transparency flag |
-| **Hallucinated PDF Math** | LLM parsing errors on balance sheet | Deterministic Python verification rule ($\pm £2$ tolerance) before dossier generation |
-| **Non-B2B Wasted Compute** | Scraping retail/consumer businesses | Upstream SIC code filter discarding non-invoice finance sectors |
+Every adjustment must bundle its supporting `PrimarySourceReference` records to ensure underwriters can audit the origin in one click.

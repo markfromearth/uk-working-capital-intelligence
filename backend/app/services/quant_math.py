@@ -5,7 +5,13 @@ calculates 80% facility borrowing bases, and generates commercial outreach copy.
 """
 
 from typing import List, Optional
-from backend.app.schemas.warden import BalanceSheetData, TrappedCashDossier, ScreeningResult
+from backend.app.schemas.warden import (
+    BalanceSheetData,
+    PrimarySourceReference,
+    ScoreRefinementAdjustment,
+    ScreeningResult,
+    TrappedCashDossier,
+)
 
 
 def get_sector_debtor_factor(sic_codes: Optional[List[str]]) -> float:
@@ -37,6 +43,9 @@ class QuantMathEngine:
         cls,
         screening: ScreeningResult,
         balance_sheet: BalanceSheetData,
+        refined_score: Optional[float] = None,
+        refinements: Optional[List[ScoreRefinementAdjustment]] = None,
+        primary_sources: Optional[List[PrimarySourceReference]] = None,
     ) -> TrappedCashDossier:
         """Calculate indicative advance and construct evidence-grounded broker pitch."""
         # Determine book debts
@@ -59,9 +68,12 @@ class QuantMathEngine:
         crn = screening.crn
         name = screening.company_name
         score = screening.provisional_score
+        final_score = refined_score if refined_score is not None else score
+        score_delta = round(final_score - score, 1)
 
         pitch_parts = [
-            f"{name} (CRN: {crn}) achieved a Provisional Warden Score of {score}/100.",
+            f"{name} (CRN: {crn}) achieved a Provisional Warden Score of {score}/100"
+            + (f" (Refined to {final_score}/100 post-investigation)." if refined_score is not None and refined_score != score else "."),
             f"The business holds £{eligible_book_debts:,.0f} in {debtor_source} against £{creditors:,.0f} in creditors due within one year.",
             f"An 80% confidential invoice discounting facility releases up to £{indicative_facility:,.0f} of immediate liquidity.",
         ]
@@ -78,13 +90,24 @@ class QuantMathEngine:
 
         commercial_pitch = " ".join(pitch_parts)
 
+        # Merge primary sources
+        sources_list = list(primary_sources or [])
+        if not sources_list:
+            sources_list = list(screening.primary_sources)
+            if balance_sheet.primary_source:
+                sources_list.append(balance_sheet.primary_source)
+
         return TrappedCashDossier(
             crn=crn,
             company_name=name,
             provisional_score=score,
+            refined_score=final_score,
+            score_refinement_delta=score_delta,
             balance_sheet=balance_sheet,
             eligible_book_debts=eligible_book_debts,
             indicative_facility_80pct=indicative_facility,
             trapped_cash_release=trapped_cash_release,
             commercial_pitch=commercial_pitch,
+            refinements=refinements or [],
+            primary_sources=sources_list,
         )

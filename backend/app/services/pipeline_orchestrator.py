@@ -1,7 +1,9 @@
 """
 End-to-End Pipeline Orchestrator for CH-Only Invoice Finance Warden.
-Coordinates Stage 1 (Screening & Scoring) and Stage 2 (Quant Accounts Extraction & Trapped Cash Sizing).
-Enforces gating rules to eliminate unnecessary document retrieval and token consumption.
+Coordinates:
+- Stage 1: Structured Screening & Provisional Scoring (The Gatekeeper)
+- Stage 2: Quant Accounts Extraction & Trapped Cash Sizing
+- Stage 3: Post-Gate Intelligence Refinement Agent & Primary Source Attribution
 """
 
 from typing import Any, Dict, List, Optional
@@ -10,6 +12,7 @@ from backend.app.core.crn_normalizer import normalize_uk_crn
 from backend.app.schemas.warden import (
     BalanceSheetData,
     LendingArchetype,
+    PrimarySourceReference,
     ScreeningResult,
     TrappedCashDossier,
 )
@@ -19,10 +22,11 @@ from backend.app.services.accounts_fetcher import AccountsFetcher
 from backend.app.services.ixbrl_parser import IXBRLParser
 from backend.app.services.pdf_vision_extractor import PDFVisionExtractor
 from backend.app.services.quant_math import QuantMathEngine
+from backend.app.services.refinement_agent import IntelligenceRefinementAgent
 
 
 class WardenPipelineOrchestrator:
-    """Orchestrates Stage 1 screening and Stage 2 financial sizing."""
+    """Orchestrates Stage 1 screening, Stage 2 financial sizing, and Stage 3 intelligence refinement."""
 
     def __init__(
         self,
@@ -68,6 +72,7 @@ class WardenPipelineOrchestrator:
 
         charges = await self.ch_client.fetch_charges(norm_crn)
         filings = await self.ch_client.fetch_filing_history(norm_crn)
+        officers = await self.ch_client.fetch_officers(norm_crn)
 
         # Configure dynamic scorer
         scorer = ProvisionalScorer(
@@ -82,7 +87,7 @@ class WardenPipelineOrchestrator:
         if not screening_res.passed_gate:
             logger.info(
                 f"Warden gate barrier: {norm_crn} scored {screening_res.provisional_score} "
-                f"(min {min_gate_threshold}). Stage 2 bypassed."
+                f"(min {min_gate_threshold}). Stage 2 and Stage 3 bypassed."
             )
             return {
                 "status": "BELOW_GATE",
@@ -109,6 +114,18 @@ class WardenPipelineOrchestrator:
                         if pruned_bytes:
                             balance_sheet = PDFVisionExtractor.extract_from_pruned_pdf(pruned_bytes)
 
+                    # Attach document primary source reference
+                    if balance_sheet:
+                        balance_sheet.primary_source = PrimarySourceReference(
+                            source_type="ACCOUNTS_DOCUMENT",
+                            source_id=doc_url.rstrip("/").split("/")[-1],
+                            title="Statutory Accounts Annual Filing Document",
+                            uri=doc_url,
+                            retrieval_method="DOCUMENT_API",
+                            published_date=acc_meta.get("date"),
+                            excerpt=f"Extracted net current assets: £{balance_sheet.net_current_assets:,.0f} ({balance_sheet.accounting_framework})",
+                        )
+
         # If document parsing was unavailable, provide conservative structural estimate
         if not balance_sheet:
             balance_sheet = BalanceSheetData(
@@ -120,15 +137,39 @@ class WardenPipelineOrchestrator:
                 creditors_due_within_one_year=180000.0,
                 net_current_assets=170000.0,
                 is_arithmetic_valid=True,
+                primary_source=PrimarySourceReference(
+                    source_type="ACCOUNTS_DOCUMENT",
+                    source_id=f"ESTIMATED_ACCOUNTS_{norm_crn}",
+                    title="Estimated Accounts Snapshot (Conservative FRS 105)",
+                    uri=f"https://find-and-update.company-information.service.gov.uk/company/{norm_crn}/filing-history",
+                    retrieval_method="REST_API",
+                    excerpt="Estimated balance sheet based on sector working-capital ratios.",
+                ),
             )
 
+        # --- STAGE 3: Post-Gate Handoff to Intelligence Refinement Agent ---
+        refined_score, adjustments, all_primary_sources = IntelligenceRefinementAgent.refine_provisional_score(
+            screening=screening_res,
+            balance_sheet=balance_sheet,
+            profile=profile,
+            charges=charges,
+            filings=filings,
+            officers=officers,
+        )
+
         # Size facility and construct outreach copy
-        dossier = QuantMathEngine.size_facility(screening_res, balance_sheet)
+        dossier = QuantMathEngine.size_facility(
+            screening=screening_res,
+            balance_sheet=balance_sheet,
+            refined_score=refined_score,
+            refinements=adjustments,
+            primary_sources=all_primary_sources,
+        )
         self._dossier_store[norm_crn] = dossier
 
         return {
             "status": "QUALIFIED",
-            "message": "Prospect successfully qualified and financial borrowing base sized",
+            "message": "Prospect successfully qualified, refined, and borrowing base sized",
             "screening": screening_res,
             "dossier": dossier,
         }

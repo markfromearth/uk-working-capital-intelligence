@@ -1,13 +1,19 @@
 """
 FastAPI REST API router for Companies House Invoice Finance Warden.
-Exposes endpoints for screening companies, listing qualified leads, and inspecting trapped cash dossiers.
+Exposes endpoints for screening companies, listing qualified leads,
+inspecting trapped cash dossiers, and retrieving primary source evidence.
 """
 
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from backend.app.schemas.warden import LendingArchetype, TrappedCashDossier, ScreeningResult
+from backend.app.schemas.warden import (
+    LendingArchetype,
+    PrimarySourceReference,
+    TrappedCashDossier,
+    ScreeningResult,
+)
 from backend.app.services.pipeline_orchestrator import default_pipeline_orchestrator
 
 router = APIRouter(prefix="/warden", tags=["Invoice Finance Warden (CH-Only)"])
@@ -26,9 +32,10 @@ async def screen_company(
     payload: Optional[ScreenCompanyRequest] = None,
 ):
     """
-    Execute autonomous two-stage screening on a UK Company:
+    Execute autonomous three-stage screening on a UK Company:
     1. Stage 1: Structured screening & provisional scoring.
     2. Stage 2 (if Score >= Threshold): Quant accounts extraction & borrowing base sizing.
+    3. Stage 3: Post-gate Intelligence Refinement & primary source attribution.
     """
     req = payload or ScreenCompanyRequest()
     result = await default_pipeline_orchestrator.process_company(
@@ -63,6 +70,21 @@ def get_prospect_dossier(crn: str):
             detail=f"No qualified dossier found for CRN {crn}. Run /warden/screen/{crn} first.",
         )
     return dossier
+
+
+@router.get("/prospects/{crn}/primary-sources", response_model=List[PrimarySourceReference])
+def get_prospect_primary_sources(crn: str):
+    """
+    Retrieve all retrievable primary sources of evidence (Companies House filings,
+    mortgage register entries, statutory document links) for an indicated prospect.
+    """
+    dossier = default_pipeline_orchestrator.get_dossier(crn)
+    if not dossier:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No qualified dossier found for CRN {crn}. Run /warden/screen/{crn} first.",
+        )
+    return dossier.primary_sources
 
 
 @router.get("/health")

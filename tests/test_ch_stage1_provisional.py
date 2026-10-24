@@ -1,6 +1,6 @@
 """
 Unit and integration tests for Stage 1: Companies House Ingestion & Provisional Scorer.
-Verifies rate-limiting, indicator logic, dynamic weight normalization, and hard knockouts.
+Verifies rate-limiting, indicator logic, dynamic weight normalization, hard knockouts, and primary sources.
 """
 
 import pytest
@@ -36,18 +36,22 @@ def test_classify_lender():
 
 def test_b2b_sic_eligibility():
     # 49410 is Freight transport by road
-    ok, reason = is_b2b_eligible(["49410"])
+    ok, reason, source = is_b2b_eligible(["49410"], crn="08421099")
     assert ok is True
     assert "Qualified B2B" in reason
+    assert source is not None
+    assert source.source_type == "COMPANIES_HOUSE_PROFILE"
 
     # 10710 is Manufacture of bread
-    ok, _ = is_b2b_eligible(["10710"])
+    ok, _, source = is_b2b_eligible(["10710"], crn="08421099")
     assert ok is True
+    assert source is not None
 
     # 47110 is Retail sale in non-specialised stores
-    ok, reason = is_b2b_eligible(["47110"])
+    ok, reason, source = is_b2b_eligible(["47110"], crn="08421099")
     assert ok is False
     assert "retail" in reason.lower()
+    assert source is None
 
 
 def test_white_space_qualification():
@@ -64,10 +68,12 @@ def test_white_space_qualification():
         }
     ]
 
-    ok, decay, reason = evaluate_white_space(charges, as_of=now)
+    ok, decay, reason, source = evaluate_white_space(charges, as_of=now, crn="08421099")
     assert ok is True
     assert decay > 0.5
     assert "Unencumbered book debts" in reason
+    assert source is not None
+    assert source.source_type == "COMPANIES_HOUSE_CHARGES"
 
 
 def test_active_debenture_blocks_white_space():
@@ -91,10 +97,11 @@ def test_active_debenture_blocks_white_space():
         },
     ]
 
-    ok, decay, reason = evaluate_white_space(charges, as_of=now)
+    ok, decay, reason, source = evaluate_white_space(charges, as_of=now, crn="08421099")
     assert ok is False
     assert decay == 0.0
     assert "Active charge present" in reason
+    assert source is not None
 
 
 def test_refinance_window_qualification():
@@ -110,10 +117,11 @@ def test_refinance_window_qualification():
         }
     ]
 
-    ok, factor, reason = evaluate_refinance_window(charges, as_of=now)
+    ok, factor, reason, source = evaluate_refinance_window(charges, as_of=now, crn="08421099")
     assert ok is True
     assert factor == 1.0
     assert "Refinance candidate" in reason
+    assert source is not None
 
 
 def test_tm01_cluster_detection():
@@ -124,10 +132,11 @@ def test_tm01_cluster_detection():
         {"type": "CS01", "date": (now - timedelta(days=60)).strftime("%Y-%m-%d")},
     ]
 
-    ok, count, reason = evaluate_tm01_cluster(filings, as_of=now)
+    ok, count, reason, source = evaluate_tm01_cluster(filings, as_of=now, crn="08421099")
     assert ok is True
     assert count == 2
     assert "Cluster detected" in reason
+    assert source is not None
 
 
 def test_hard_knockout_on_gazette_notice():
@@ -146,6 +155,7 @@ def test_hard_knockout_on_gazette_notice():
     assert result.provisional_score == 0.0
     assert result.passed_gate is False
     assert "First Gazette" in (result.knockout_reason or "")
+    assert len(result.primary_sources) >= 1
 
 
 def test_provisional_scorer_passing_gate():
@@ -175,6 +185,7 @@ def test_provisional_scorer_passing_gate():
     assert result.passed_gate is True
     assert result.provisional_score >= 40.0
     assert result.is_b2b_eligible is True
+    assert len(result.primary_sources) >= 2
 
 
 @pytest.mark.asyncio

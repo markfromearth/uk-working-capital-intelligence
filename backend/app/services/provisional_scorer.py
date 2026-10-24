@@ -1,7 +1,8 @@
 """
 Dynamic Provisional Scorer & Gatekeeper for CH-Only Invoice Finance Warden.
 Calculates transparent 0-100 scores based on user-defined weights,
-applies lending archetype knockouts, and gates companies for Stage 2 Quant extraction.
+applies lending archetype knockouts, collects retrievable primary sources,
+and gates companies for Stage 2 Quant extraction and Stage 3 Intelligence Refinement.
 """
 
 from datetime import datetime, timezone
@@ -10,6 +11,7 @@ from typing import Any, Dict, List, Optional
 from backend.app.schemas.warden import (
     IndicatorBreakdown,
     LendingArchetype,
+    PrimarySourceReference,
     ScreeningResult,
 )
 from backend.app.services.indicator_engine import (
@@ -75,22 +77,29 @@ class ProvisionalScorer:
         filings: List[Dict[str, Any]],
         as_of: Optional[datetime] = None,
     ) -> ScreeningResult:
-        """Run Stage 1 evaluation and return a typed ScreeningResult."""
+        """Run Stage 1 evaluation and return a typed ScreeningResult with primary sources."""
         now = as_of or datetime.now(timezone.utc)
         company_name = profile.get("company_name", f"Company {crn}")
         sic_codes = profile.get("sic_codes", [])
 
         # 1. B2B Sector Check
-        b2b_ok, b2b_reason = is_b2b_eligible(sic_codes)
+        b2b_ok, b2b_reason, b2b_source = is_b2b_eligible(sic_codes, crn=crn)
 
         # 2. Extract Indicators
-        ws_ok, ws_factor, ws_reason = evaluate_white_space(charges, as_of=now)
-        refin_ok, refin_factor, refin_reason = evaluate_refinance_window(charges, as_of=now)
-        tm01_ok, tm01_count, tm01_reason = evaluate_tm01_cluster(filings, as_of=now)
-        delinq_ok, gazette_or_insolvent, delinq_reason = evaluate_admin_delinquency(profile, filings)
+        ws_ok, ws_factor, ws_reason, ws_source = evaluate_white_space(charges, as_of=now, crn=crn)
+        refin_ok, refin_factor, refin_reason, refin_source = evaluate_refinance_window(charges, as_of=now, crn=crn)
+        tm01_ok, tm01_count, tm01_reason, tm01_source = evaluate_tm01_cluster(filings, as_of=now, crn=crn)
+        delinq_ok, gazette_or_insolvent, delinq_reason, delinq_source = evaluate_admin_delinquency(profile, filings, crn=crn)
 
         # 3. Check Hard Knockouts
         if self.archetype == LendingArchetype.PRIME_INVOICE_DISCOUNTING and gazette_or_insolvent:
+            knockout_source = delinq_source or PrimarySourceReference(
+                source_type="COMPANIES_HOUSE_PROFILE",
+                source_id="HARD_KNOCKOUT",
+                title=f"Disqualifying Strike-off/Insolvency Status",
+                uri=f"https://find-and-update.company-information.service.gov.uk/company/{crn}",
+                excerpt=delinq_reason,
+            )
             audit = [
                 IndicatorBreakdown(
                     indicator="hard_knockout",
@@ -98,6 +107,7 @@ class ProvisionalScorer:
                     awarded=0.0,
                     triggered=True,
                     evidence=f"Disqualified under Prime rules: {delinq_reason}",
+                    primary_source=knockout_source,
                 )
             ]
             return ScreeningResult(
@@ -110,11 +120,13 @@ class ProvisionalScorer:
                 knockout_applied=True,
                 knockout_reason=delinq_reason,
                 audit_trail=audit,
+                primary_sources=[knockout_source],
             )
 
-        # 4. Compute Normalized Scores
+        # 4. Compute Normalized Scores & Collate Primary Sources
         norm_weights = self._get_normalized_weights()
         audit_trail: List[IndicatorBreakdown] = []
+        primary_sources: List[PrimarySourceReference] = []
         total_score = 0.0
 
         # White Space
@@ -128,8 +140,11 @@ class ProvisionalScorer:
                 awarded=ws_awarded,
                 triggered=ws_ok,
                 evidence=ws_reason,
+                primary_source=ws_source,
             )
         )
+        if ws_source and ws_ok:
+            primary_sources.append(ws_source)
 
         # Refinance Window
         refin_weight = norm_weights.get("refinance_window", 0.0)
@@ -142,8 +157,11 @@ class ProvisionalScorer:
                 awarded=refin_awarded,
                 triggered=refin_ok,
                 evidence=refin_reason,
+                primary_source=refin_source,
             )
         )
+        if refin_source and refin_ok:
+            primary_sources.append(refin_source)
 
         # TM01 Resignation Cluster
         tm01_weight = norm_weights.get("tm01_cluster", 0.0)
@@ -156,8 +174,11 @@ class ProvisionalScorer:
                 awarded=tm01_awarded,
                 triggered=tm01_ok,
                 evidence=tm01_reason,
+                primary_source=tm01_source,
             )
         )
+        if tm01_source and tm01_ok:
+            primary_sources.append(tm01_source)
 
         # Administrative Delinquency
         admin_weight = norm_weights.get("admin_delinquency", 0.0)
@@ -170,8 +191,11 @@ class ProvisionalScorer:
                 awarded=admin_awarded,
                 triggered=delinq_ok,
                 evidence=delinq_reason,
+                primary_source=delinq_source,
             )
         )
+        if delinq_source and delinq_ok:
+            primary_sources.append(delinq_source)
 
         # B2B Sector Fit
         b2b_weight = norm_weights.get("b2b_sector_fit", 0.0)
@@ -184,8 +208,11 @@ class ProvisionalScorer:
                 awarded=b2b_awarded,
                 triggered=b2b_ok,
                 evidence=b2b_reason,
+                primary_source=b2b_source,
             )
         )
+        if b2b_source and b2b_ok:
+            primary_sources.append(b2b_source)
 
         final_score = min(100.0, round(total_score, 1))
         passed_gate = final_score >= self.min_gate_threshold
@@ -200,4 +227,5 @@ class ProvisionalScorer:
             knockout_applied=False,
             knockout_reason=None,
             audit_trail=audit_trail,
+            primary_sources=primary_sources,
         )

@@ -2,8 +2,9 @@
 """
 Verification Script for Companies House Invoice Finance Warden (CH-Only MVP).
 Runs end-to-end evaluation of a company:
-- Stage 1: Structured screening and 100-pt provisional scoring.
+- Stage 1: Structured screening and 100-pt provisional scoring (The Gatekeeper).
 - Stage 2: Quant accounts balance sheet extraction & trapped cash sizing.
+- Stage 3: Post-gate Intelligence Refinement Agent & primary source retrieval.
 """
 
 import asyncio
@@ -32,6 +33,7 @@ async def main():
                     "company_number": target_crn,
                     "company_name": "TITAN FREIGHT & LOGISTICS LTD",
                     "company_status": "active",
+                    "date_of_creation": "2018-05-10",  # Seasoned 8-year-old enterprise
                     "sic_codes": ["49410"],  # Freight transport by road
                     "accounts": {"overdue": False},
                     "confirmation_statement": {"overdue": False},
@@ -52,6 +54,18 @@ async def main():
                         "links": {"document_metadata": "https://document-api.company-information.service.gov.uk/document/doc123"},
                     }
                 ],
+                "officers": [
+                    {
+                        "name": "DAVIS, Arthur",
+                        "officer_role": "director",
+                        "appointed_on": "2018-05-10",
+                    },
+                    {
+                        "name": "DAVIS, Sarah",
+                        "officer_role": "director",
+                        "appointed_on": "2019-02-14",
+                    },
+                ],
             },
         )
 
@@ -60,7 +74,7 @@ async def main():
     print(f"=======================================================\n")
     print(f"[*] Target CRN: {target_crn} {'(DEMO FIXTURE)' if use_demo else '(LIVE LOOKUP)'}")
     print(f"[*] Mode: Companies House Statutory Data Pipeline (100% Free Public Data)")
-    print(f"[*] Executing Stage 1 (Screening & Scoring) & Stage 2 (Quant Sizing)...\n")
+    print(f"[*] Executing Stage 1 (Screening), Stage 2 (Quant), & Stage 3 (Refinement)...\n")
 
     threshold = 45.0 if use_demo else 50.0
     for arg in sys.argv:
@@ -78,7 +92,7 @@ async def main():
 
     screening = result.get("screening")
     if screening:
-        print(f"\n--- STAGE 1: STRUCTURED SCREENING & SCORING ---")
+        print(f"\n--- STAGE 1: STRUCTURED SCREENING & PROVISIONAL SCORING ---")
         print(f"Company Name:       {screening.company_name}")
         print(f"SIC Codes:          {screening.sic_codes}")
         print(f"B2B Trade Eligible: {screening.is_b2b_eligible}")
@@ -110,10 +124,29 @@ async def main():
         print(f"Indicative 80% Advance: £{dossier.indicative_facility_80pct:,.2f}")
         print(f"Trapped Cash Release:   £{dossier.trapped_cash_release:,.2f}")
 
+        print(f"\n--- STAGE 3: POST-GATE INTELLIGENCE REFINEMENT & PROVENANCE ---")
+        print(f"Provisional Base Score: {dossier.provisional_score} pts")
+        sign = "+" if dossier.score_refinement_delta >= 0 else ""
+        print(f"Refinement Delta:       {sign}{dossier.score_refinement_delta} pts")
+        print(f"Final Refined Score:    {dossier.refined_score} / 100.0 pts")
+
+        print(f"\n[Refinement Adjustments & Justifications]")
+        for adj in dossier.refinements:
+            adj_sign = "+" if adj.delta_points >= 0 else ""
+            print(f"  • [{adj.direction}] {adj.metric_name}: {adj_sign}{adj.delta_points} pts")
+            print(f"    Justification: {adj.justification}")
+
+        print(f"\n[Retrievable Primary Source Evidence ({len(dossier.primary_sources)} sources)]")
+        for i, src in enumerate(dossier.primary_sources, start=1):
+            print(f"  [{i}] {src.source_type}: {src.title}")
+            print(f"      URI: {src.uri}")
+            if src.excerpt:
+                print(f"      Excerpt: \"{src.excerpt}\"")
+
         print(f"\n[Underwriting Sales Pitch]")
         print(f"\"{dossier.commercial_pitch}\"")
     else:
-        print(f"\n[*] Stage 2 Bypassed (Company did not pass Stage 1 Gate or accounts unavailable).")
+        print(f"\n[*] Stage 2 & 3 Bypassed (Company did not pass Stage 1 Gate or accounts unavailable).")
 
     print(f"\n=======================================================")
     print(f"  VERIFICATION RUN COMPLETE")
