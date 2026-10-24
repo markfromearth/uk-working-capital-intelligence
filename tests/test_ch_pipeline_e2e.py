@@ -45,6 +45,16 @@ def api_client():
             ],
         },
     )
+    sample_xhtml = """<?xml version="1.0" encoding="UTF-8"?>
+    <html xmlns="http://www.w3.org/1999/xhtml" xmlns:ix="http://www.xbrl.org/2008/inlineXBRL" xmlns:uk-gaap="http://www.xbrl.org/uk/gaap/core/2009-09-01">
+    <body>
+        <ix:nonFraction name="uk-gaap:Debtors">450000</ix:nonFraction>
+        <ix:nonFraction name="uk-gaap:CurrentAssets">485000</ix:nonFraction>
+        <ix:nonFraction name="uk-gaap:CreditorsDueWithinOneYear">(260000)</ix:nonFraction>
+        <ix:nonFraction name="uk-gaap:NetCurrentAssetsLiabilities">225000</ix:nonFraction>
+    </body>
+    </html>""".encode("utf-8")
+    default_pipeline_orchestrator.fetcher.register_fixture("doc123", sample_xhtml, "application/xhtml+xml")
     return TestClient(app)
 
 
@@ -80,7 +90,19 @@ async def test_pipeline_orchestrator_qualified_flow():
             ],
         },
     )
-    orchestrator = WardenPipelineOrchestrator(ch_client=ch_client)
+    fetcher = AccountsFetcher()
+    sample_xhtml = """<?xml version="1.0" encoding="UTF-8"?>
+    <html xmlns="http://www.w3.org/1999/xhtml" xmlns:ix="http://www.xbrl.org/2008/inlineXBRL" xmlns:uk-gaap="http://www.xbrl.org/uk/gaap/core/2009-09-01">
+    <body>
+        <ix:nonFraction name="uk-gaap:Debtors">450000</ix:nonFraction>
+        <ix:nonFraction name="uk-gaap:CurrentAssets">485000</ix:nonFraction>
+        <ix:nonFraction name="uk-gaap:CreditorsDueWithinOneYear">(260000)</ix:nonFraction>
+        <ix:nonFraction name="uk-gaap:NetCurrentAssetsLiabilities">225000</ix:nonFraction>
+    </body>
+    </html>""".encode("utf-8")
+    fetcher.register_fixture("doc123", sample_xhtml, "application/xhtml+xml")
+
+    orchestrator = WardenPipelineOrchestrator(ch_client=ch_client, fetcher=fetcher)
     result = await orchestrator.process_company(
         crn="08421099",
         min_gate_threshold=40.0,
