@@ -55,9 +55,11 @@ def test_clean_health_and_system_providers_endpoint():
     prov_resp = client.get("/api/v1/system/providers")
     assert prov_resp.status_code == 200
     prov_data = prov_resp.json()
-    assert len(prov_data) == 4
+    assert len(prov_data) >= 4
     names = [p["provider_name"] for p in prov_data]
     assert "companies_house" in names
+    assert "contracts_finder" in names
+    assert "the_gazette" in names
     assert "creditsafe" in names
     assert "experian" in names
     assert "workforce_intelligence" in names

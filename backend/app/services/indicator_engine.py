@@ -586,3 +586,105 @@ def evaluate_asset_finance_charges(
         )
         return True, len(hits), f"Asset finance footprint: {len(hits)} outstanding asset-backed charge(s) (e.g. {holder})", source
     return False, 0, "No outstanding asset-backed or leasing charges", None
+
+
+def evaluate_contract_awards(
+    signals: List[Dict[str, Any]],
+    as_of: Optional[datetime] = None,
+    crn: str = "",
+) -> Tuple[bool, float, str, Optional[PrimarySourceReference]]:
+    """
+    Public Procurement Contract Awards (Contracts Finder / FTS OCDS):
+    Detects public sector contract wins in the trailing 180 days.
+    Winning sizable supply contracts creates operational mobilization lag and working capital demand.
+    Returns (triggered, mobilization_working_capital_estimate_gbp, description, primary_source).
+    """
+    now = as_of or datetime.now(timezone.utc)
+    hits: List[Dict[str, Any]] = []
+
+    for sig in signals:
+        if sig.get("signal_type") != "contract_award_growth":
+            continue
+        obs_time = sig.get("observation_timestamp")
+        if isinstance(obs_time, str):
+            obs_dt = parse_date(obs_time)
+        elif isinstance(obs_time, datetime):
+            obs_dt = obs_time if obs_time.tzinfo else obs_time.replace(tzinfo=timezone.utc)
+        else:
+            obs_dt = None
+
+        if obs_dt:
+            age_days = (now - obs_dt).total_seconds() / 86400.0
+            if age_days > 180.0:
+                continue
+
+        hits.append(sig)
+
+    if not hits:
+        return False, 0.0, "No public contract awards observed in trailing 180 days", None
+
+    total_value = sum(float(h.get("value_numeric", 0.0) or 0.0) for h in hits)
+    # Typical SME mobilization working-capital requirement is 20% of contract value
+    est_mobilization_capital = round(total_value * 0.20, 2)
+    latest = hits[0]
+    ref_uri = latest.get("evidence_reference", f"https://www.contractsfinder.service.gov.uk/notice/{latest.get('original_event_ref', '')}")
+
+    source = PrimarySourceReference(
+        source_type="CONTRACTS_FINDER",
+        source_id=str(latest.get("original_event_ref", f"CF_{crn}")),
+        title=f"UK Public Procurement Contract Award ({latest.get('value_text', 'Award')})",
+        uri=ref_uri,
+        retrieval_method="REST_API",
+        published_date=str(latest.get("observation_timestamp", ""))[:10],
+        excerpt=f"Total awarded contract value: £{total_value:,.0f}. Estimated working capital requirement: £{est_mobilization_capital:,.0f}.",
+    )
+    desc = f"Won {len(hits)} public contract(s) (£{total_value:,.0f} total). Estimated mobilization funding demand: £{est_mobilization_capital:,.0f}."
+    return True, est_mobilization_capital, desc, source
+
+
+def evaluate_gazette_insolvency(
+    signals: List[Dict[str, Any]],
+    as_of: Optional[datetime] = None,
+    crn: str = "",
+) -> Tuple[bool, str, Optional[PrimarySourceReference]]:
+    """
+    The Gazette Statutory Corporate Insolvency Notices:
+    Detects official winding-up petitions, appointment of administrators/liquidators,
+    or creditors' voluntary liquidation notices in the trailing 365 days.
+    Acts as a definitive disqualifying knockout for prime financing.
+    Returns (triggered, description, primary_source).
+    """
+    now = as_of or datetime.now(timezone.utc)
+    for sig in signals:
+        if sig.get("signal_type") != "gazette_insolvency_notice":
+            continue
+        obs_time = sig.get("observation_timestamp")
+        if isinstance(obs_time, str):
+            obs_dt = parse_date(obs_time)
+        elif isinstance(obs_time, datetime):
+            obs_dt = obs_time if obs_time.tzinfo else obs_time.replace(tzinfo=timezone.utc)
+        else:
+            obs_dt = None
+
+        if obs_dt:
+            age_days = (now - obs_dt).total_seconds() / 86400.0
+            if age_days > 365.0:
+                continue
+
+        notice_text = sig.get("value_text", "Statutory Insolvency Notice")
+        ref_uri = sig.get("evidence_reference", "https://www.thegazette.co.uk")
+        notice_id = str(sig.get("original_event_ref", "GAZETTE_NOTICE"))
+
+        source = PrimarySourceReference(
+            source_type="GAZETTE_NOTICE",
+            source_id=notice_id,
+            title="The Gazette Statutory Insolvency Notice",
+            uri=ref_uri,
+            retrieval_method="PUBLIC_WEB",
+            published_date=str(obs_dt)[:10] if obs_dt else None,
+            excerpt=f"Published statutory notice: {notice_text}",
+        )
+        return True, f"Active statutory insolvency notice in The Gazette: {notice_text}", source
+
+    return False, "No active corporate insolvency notices published in The Gazette", None
+

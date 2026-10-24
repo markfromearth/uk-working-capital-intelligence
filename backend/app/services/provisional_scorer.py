@@ -18,6 +18,8 @@ from backend.app.services.indicator_engine import (
     evaluate_aa01_extension,
     evaluate_admin_delinquency,
     evaluate_asset_finance_charges,
+    evaluate_contract_awards,
+    evaluate_gazette_insolvency,
     evaluate_incumbent_lender,
     evaluate_recent_event_velocity,
     evaluate_refinance_window,
@@ -33,6 +35,7 @@ DEFAULT_INDICATOR_WEIGHTS = {
     "recent_event_velocity": 15.0,     # Mitigates statutory reporting latency
     "b2b_sector_fit": 15.0,
     "sh01_capital_allotment": 10.0,    # Intra-year equity injection
+    "contract_award_growth": 10.0,     # Procurement win working capital lag
     "tm01_cluster": 5.0,
     "admin_delinquency": 5.0,
 }
@@ -43,6 +46,7 @@ DEFAULT_TOGGLES = {
     "recent_event_velocity": True,
     "b2b_sector_fit": True,
     "sh01_capital_allotment": True,
+    "contract_award_growth": True,
     "tm01_cluster": True,
     "admin_delinquency": True,
 }
@@ -85,6 +89,7 @@ class ProvisionalScorer:
         charges: List[Dict[str, Any]],
         filings: List[Dict[str, Any]],
         as_of: Optional[datetime] = None,
+        signals: Optional[List[Dict[str, Any]]] = None,
     ) -> ScreeningResult:
         """Run Stage 1 evaluation and return a typed ScreeningResult with primary sources."""
         now = as_of or datetime.now(timezone.utc)
@@ -102,25 +107,28 @@ class ProvisionalScorer:
         aa01_ok, aa01_reason, aa01_source = evaluate_aa01_extension(filings, as_of=now, crn=crn)
         tm01_ok, tm01_count, tm01_reason, tm01_source = evaluate_tm01_cluster(filings, as_of=now, crn=crn)
         delinq_ok, gazette_or_insolvent, delinq_reason, delinq_source = evaluate_admin_delinquency(profile, filings, crn=crn)
+        gz_ok, gz_reason, gz_source = evaluate_gazette_insolvency(signals or [], as_of=now, crn=crn)
+        ca_ok, ca_need, ca_reason, ca_source = evaluate_contract_awards(signals or [], as_of=now, crn=crn)
         incumbent_ok, incumbent_reason, _incumbent_cls, incumbent_source = evaluate_incumbent_lender(charges, as_of=now, crn=crn)
         asset_ok, _asset_count, asset_reason, asset_source = evaluate_asset_finance_charges(charges, crn=crn)
 
         # 3. Check Hard Knockouts
-        if self.archetype == LendingArchetype.PRIME_INVOICE_DISCOUNTING and gazette_or_insolvent:
-            knockout_source = delinq_source or PrimarySourceReference(
+        if self.archetype == LendingArchetype.PRIME_INVOICE_DISCOUNTING and (gazette_or_insolvent or gz_ok):
+            knockout_reason = gz_reason if gz_ok else delinq_reason
+            knockout_source = gz_source if gz_ok else (delinq_source or PrimarySourceReference(
                 source_type="COMPANIES_HOUSE_PROFILE",
                 source_id="HARD_KNOCKOUT",
-                title=f"Disqualifying Strike-off/Insolvency Status",
+                title="Disqualifying Strike-off/Insolvency Status",
                 uri=f"https://find-and-update.company-information.service.gov.uk/company/{crn}",
                 excerpt=delinq_reason,
-            )
+            ))
             audit = [
                 IndicatorBreakdown(
                     indicator="hard_knockout",
                     weight=0.0,
                     awarded=0.0,
                     triggered=True,
-                    evidence=f"Disqualified under Prime rules: {delinq_reason}",
+                    evidence=f"Disqualified under Prime rules: {knockout_reason}",
                     primary_source=knockout_source,
                 )
             ]
@@ -132,7 +140,7 @@ class ProvisionalScorer:
                 provisional_score=0.0,
                 passed_gate=False,
                 knockout_applied=True,
-                knockout_reason=delinq_reason,
+                knockout_reason=knockout_reason,
                 audit_trail=audit,
                 primary_sources=[knockout_source],
             )
@@ -210,6 +218,23 @@ class ProvisionalScorer:
         )
         if sh01_source and sh01_ok:
             primary_sources.append(sh01_source)
+
+        # Public Procurement Contract Award (Working Capital Mobilization Lag)
+        ca_weight = norm_weights.get("contract_award_growth", 0.0)
+        ca_awarded = round(ca_weight, 1) if ca_ok else 0.0
+        total_score += ca_awarded
+        audit_trail.append(
+            IndicatorBreakdown(
+                indicator="contract_award_growth",
+                weight=round(ca_weight, 1),
+                awarded=ca_awarded,
+                triggered=ca_ok,
+                evidence=ca_reason,
+                primary_source=ca_source,
+            )
+        )
+        if ca_source and ca_ok:
+            primary_sources.append(ca_source)
 
         # Form AA01 Accounting Reference Date Extension (Intra-Year Distress Early Warning)
         if aa01_ok:

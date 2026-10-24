@@ -53,8 +53,15 @@ PRODUCT_CATALOG: List[Dict[str, Any]] = [
         "code": "GROWTH_FINANCE",
         "name": "Growth & Acquisition Finance",
         "short": "Growth Finance",
-        "indicators": ["sh01_capital_allotment", "recent_event_velocity"],
-        "why": "Fresh equity allotments or new security registrations indicate an expansion or acquisition phase that typically needs matched debt.",
+        "indicators": ["sh01_capital_allotment", "recent_event_velocity", "contract_award_growth"],
+        "why": "Fresh equity allotments, public contract wins, or new security registrations indicate an expansion or acquisition phase that typically needs matched debt.",
+    },
+    {
+        "code": "CONTRACT_FINANCE",
+        "name": "Contract & Mobilization Working Capital",
+        "short": "Contract Finance",
+        "indicators": ["contract_award_growth"],
+        "why": "Significant public procurement contract award creates fulfillment lag and upfront supplier mobilization capital requirements.",
     },
     {
         "code": "ABL_TURNAROUND",

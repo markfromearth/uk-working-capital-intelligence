@@ -80,6 +80,16 @@ class WardenPipelineOrchestrator:
         filings = await self.ch_client.fetch_filing_history(norm_crn)
         officers = await self.ch_client.fetch_officers(norm_crn)
 
+        # Collect public procurement & gazette statutory signals
+        from backend.app.providers.registry import provider_registry
+        signals: List[Dict[str, Any]] = []
+        cf_adapter = provider_registry.get_adapter("contracts_finder")
+        if cf_adapter:
+            signals.extend(cf_adapter.fetch_company_signals(norm_crn))
+        gz_adapter = provider_registry.get_adapter("the_gazette")
+        if gz_adapter:
+            signals.extend(gz_adapter.fetch_company_signals(norm_crn))
+
         # Configure dynamic scorer
         scorer = ProvisionalScorer(
             weights=weights,
@@ -87,7 +97,7 @@ class WardenPipelineOrchestrator:
             archetype=archetype,
             min_gate_threshold=min_gate_threshold,
         )
-        screening_res = scorer.score_company(norm_crn, profile, charges, filings)
+        screening_res = scorer.score_company(norm_crn, profile, charges, filings, signals=signals)
         self._screening_store[norm_crn] = screening_res
         products = match_products(screening_res)
         self._persist_screening(screening_res, profile, charges, products, discovery_source)
