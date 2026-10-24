@@ -8,7 +8,7 @@ from backend.app.services.resolution import EntityResolutionService
 def db_session():
     init_db()
     db = SessionLocal()
-    # Add a sample target company
+    # Add or update sample target company
     comp = db.query(CompanyRegistry).filter(CompanyRegistry.crn == "08931201").first()
     if not comp:
         comp = CompanyRegistry(
@@ -19,7 +19,11 @@ def db_session():
             created_at=datetime.now(timezone.utc)
         )
         db.add(comp)
-        db.commit()
+    else:
+        comp.company_name = "Apex Precision Engineering Ltd"
+        comp.registered_office_address = "Unit 4, Gateway Industrial Estate, Birmingham, B6 7EU"
+        comp.company_status = "active"
+    db.commit()
     yield db
     db.close()
 

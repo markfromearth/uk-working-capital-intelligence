@@ -57,27 +57,31 @@ class AccountsFetcher:
         headers = {"Accept": "application/xhtml+xml, application/pdf"}
 
         # Step 1: Request with follow_redirects=False to inspect redirect target
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            resp = await client.get(content_url, auth=auth, headers=headers, follow_redirects=False)
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(content_url, auth=auth, headers=headers, follow_redirects=False)
 
-            if resp.status_code in (301, 302, 303, 307):
-                redirect_target = resp.headers.get("Location")
-                if not redirect_target:
-                    logger.error("CH Document API returned redirect status without Location header")
-                    return None, None
+                if resp.status_code in (301, 302, 303, 307):
+                    redirect_target = resp.headers.get("Location")
+                    if not redirect_target:
+                        logger.error("CH Document API returned redirect status without Location header")
+                        return None, None
 
-                # Step 2: Request redirect target WITHOUT the Authorization header
-                s3_resp = await client.get(redirect_target, follow_redirects=True)
-                if s3_resp.status_code == 200:
-                    c_type = s3_resp.headers.get("Content-Type", "application/pdf")
-                    return s3_resp.content, c_type
+                    # Step 2: Request redirect target WITHOUT the Authorization header
+                    s3_resp = await client.get(redirect_target, follow_redirects=True)
+                    if s3_resp.status_code == 200:
+                        c_type = s3_resp.headers.get("Content-Type", "application/pdf")
+                        return s3_resp.content, c_type
+                    else:
+                        logger.error(f"S3 download failed with status {s3_resp.status_code}")
+                        return None, None
+
+                elif resp.status_code == 200:
+                    c_type = resp.headers.get("Content-Type", "application/pdf")
+                    return resp.content, c_type
                 else:
-                    logger.error(f"S3 download failed with status {s3_resp.status_code}")
+                    logger.error(f"Failed to fetch document metadata: status {resp.status_code}")
                     return None, None
-
-            elif resp.status_code == 200:
-                c_type = resp.headers.get("Content-Type", "application/pdf")
-                return resp.content, c_type
-            else:
-                logger.error(f"Failed to fetch document metadata: status {resp.status_code}")
-                return None, None
+        except Exception as e:
+            logger.warning(f"Error downloading document from {document_metadata_url}: {e}")
+            return None, None
