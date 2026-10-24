@@ -90,6 +90,14 @@ async def get_company_intelligence_profile(crn: str, db: Session = Depends(get_d
         except Exception as e:
             logger.warning(f"On-demand screen during profile fetch for {norm_crn}: {e}")
 
+    officers = []
+    pscs = []
+    try:
+        officers = await default_pipeline_orchestrator.ch_client.fetch_officers(norm_crn)
+        pscs = await default_pipeline_orchestrator.ch_client.fetch_pscs(norm_crn)
+    except Exception as e:
+        logger.warning(f"Error fetching officers/PSCs for {norm_crn}: {e}")
+
     return {
         "company": {
             "crn": company.crn,
@@ -106,6 +114,8 @@ async def get_company_intelligence_profile(crn: str, db: Session = Depends(get_d
         },
         "warden_dossier": warden_dossier.model_dump() if warden_dossier else None,
         "screening_result": screening_result.model_dump() if screening_result else None,
+        "officers": officers,
+        "pscs": pscs,
         "score_summary": {
             "score": latest_score.score if latest_score else None,
             "score_band": latest_score.score_band if latest_score else "limited",

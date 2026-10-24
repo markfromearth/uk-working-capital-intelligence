@@ -175,3 +175,30 @@ class CompaniesHouseCHClient:
         except (httpx.TimeoutException, httpx.RequestError) as e:
             logger.warning(f"Network error querying CH officers for {norm_crn}: {e}")
             return []
+
+    async def fetch_pscs(self, crn: str) -> List[Dict[str, Any]]:
+        """Fetch Persons with Significant Control (PSC) directly from Companies House."""
+        norm_crn, valid, _ = normalize_uk_crn(crn)
+        if not valid or not norm_crn:
+            return []
+
+        if norm_crn in self._test_fixtures:
+            return self._test_fixtures[norm_crn].get("pscs", [])
+
+        if not self._is_live:
+            return []
+
+        await self.rate_limiter.acquire()
+        url = f"{COMPANIES_HOUSE_REST_BASE}/company/{norm_crn}/persons-with-significant-control"
+        auth = httpx.BasicAuth(self.api_key, "")
+
+        try:
+            async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
+                resp = await client.get(url, auth=auth)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    return data.get("items", [])
+                return []
+        except (httpx.TimeoutException, httpx.RequestError) as e:
+            logger.warning(f"Network error querying CH PSCs for {norm_crn}: {e}")
+            return []
