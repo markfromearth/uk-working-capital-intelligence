@@ -185,9 +185,9 @@ async def test_multi_agent_orchestrator_pipeline_end_to_end():
     assert isinstance(trace, MultiAgentExecutionTrace)
     assert trace.crn == "08931201"
     assert trace.total_cost_gbp == 0.00  # Zero cost in free mode
-    assert len(trace.task_traces) == 6
+    assert len(trace.task_traces) == 7
 
-    # Check execution order: A -> B -> C -> D -> E -> J
+    # Check execution order: A -> B -> C -> D -> E -> F -> J
     roles = [t.role for t in trace.task_traces]
     assert roles == [
         AgentRole.SIGNAL_DETECTION,
@@ -195,6 +195,7 @@ async def test_multi_agent_orchestrator_pipeline_end_to_end():
         AgentRole.ADAPTIVE_INVESTIGATION,
         AgentRole.FINANCE_OPPORTUNITY,
         AgentRole.MARKETING_RESEARCH,
+        AgentRole.AUDIENCE_STRATEGY,
         AgentRole.INDEPENDENT_VERIFICATION,
     ]
 
