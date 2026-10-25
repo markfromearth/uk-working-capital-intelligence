@@ -68,10 +68,25 @@ The platform implements defence-in-depth across the ingestion, data persistence,
   $$\text{record\_hash} = \text{SHA-256}(\text{prev\_hash} \,\|\, \text{user\_id} \,\|\, \text{user\_email} \,\|\, \text{user\_role} \,\|\, \text{action} \,\|\, \text{resource\_type} \,\|\, \text{resource\_id} \,\|\, \text{details} \,\|\, \text{ip\_address} \,\|\, \text{timestamp})$$
 - The genesis entry uses `GENESIS_HASH = "GENESIS_BLOCK_HASH_UK_WORKING_CAPITAL_2026"`.
 - **Independently Signed Checkpoints**:
-  - Periodically and upon commits, an `AuditCheckpoint` record is stored with:
-    $$\text{signature} = \text{HMAC-SHA256}(\text{SECRET\_KEY}, \, \text{sequence} \,\|\, \text{last\_audit\_id} \,\|\, \text{last\_record\_hash} \,\|\, \text{total\_records})$$
-  - If an attacker truncates the tail records, the total record count and terminal hash will not match the signed checkpoint.
-  - If an attacker with direct SQL access attempts to recalculate all hashes, their forged chain fails HMAC checkpoint verification because they lack the host's `SECRET_KEY`.
+  - Periodically and upon commits, an `AuditCheckpoint` record is stored using a domain-separated key (`AUDIT_CHECKPOINT_SECRET` or `HMAC-SHA256(SECRET_KEY, "uk-wci-audit-checkpoint-signing-key-v2")`):
+    $$\text{signature} = \text{HMAC-SHA256}(K_{\text{checkpoint}}, \, \text{sequence} \,\|\, \text{last\_audit\_id} \,\|\, \text{last\_record\_hash} \,\|\, \text{total\_records})$$
+  - Verification (`verify_audit_log_chain(db, verify_checkpoints=True)`) rejects any record with missing/empty `prev_hash` or `record_hash`, verifies monotonic IDs and timestamps, and verifies **every** checkpoint in sequence against its referenced `AuditLog` record.
+  - If an attacker truncates tail records or modifies historical rows and recomputes the `AuditLog` hash chain without possessing $K_{\text{checkpoint}}$, checkpoint verification fails immediately.
+
+---
+
+## 6. Outbound SSRF Boundary, PECR/UK GDPR Enforcement & Route Authorisation
+
+### A. Central Outbound SSRF Protection (`backend/app/core/ssrf_protection.py`)
+- All external HTTP requests (`MarketingChannelDiscoveryService`, `AccountsFetcher`, `ContractsFinderAdapter`, `GazetteAdapter`, `ComplianceRiskAgent`) pass through `validate_safe_url` and `SafeHttpClient`.
+- Rejects cleartext HTTP by default, embedded URL credentials, non-standard ports, IPv4/IPv6 loopback (`127.0.0.0/8`, `::1`), RFC1918 private ranges, link-local/cloud metadata (`169.254.169.254`, `fe80::/10`), carrier-grade NAT (`100.64.0.0/10`), IPv4-mapped IPv6 (`::ffff:127.0.0.1`), 6to4, Teredo, and numeric/hex/octal IP obfuscations.
+- Fails closed on DNS resolution errors (`socket.gaierror`), disables environment proxy inheritance (`trust_env=False`), revalidates every redirect hop (max 3 hops), and enforces dual pre-connection DNS checks against DNS rebinding.
+
+### B. PECR Regulations 22 & 23 and UK GDPR Article 21 Enforcement (`backend/app/services/identity_resolution.py`)
+- Fails closed (`UNKNOWN_SUBSCRIBER_STATUS_BLOCKED`) whenever `company_type` is missing, empty, or unrecognised—never defaulting to `"ltd"`.
+- Distinguishes UK corporate subscribers (`ltd`, `plc`, `llp`, `scottish-partnership`, `royal-charter`) from individual subscribers (`sole-trader`, English/Welsh general `partnership` without prior opt-in consent under PECR Reg 22) and non-UK entities (`OUT_OF_SCOPE_NON_UK`).
+- Enforces PECR Regulation 23 across all electronic marketing communications (mandatory sender identity disclosure and valid opt-out address/mechanism).
+- Enforces persistent suppression across CRN, person ID, normalized name, email address, and email domain at discovery, strategy generation, campaign tracking, and audience activation execution time.
 - **Integrity Verification & RBAC**:
   - `GET /api/v1/system/audit-verification` verifies both the sequential chain and the HMAC checkpoint signature.
   - Restricted strictly to `ADMIN` and `ANALYST` roles.

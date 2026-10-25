@@ -42,10 +42,25 @@ def compute_record_hash(
     content = "|".join(canonical_parts)
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
+def _get_checkpoint_hmac_key() -> bytes:
+    """
+    Returns a domain-separated key for audit checkpoint signing.
+    Uses AUDIT_CHECKPOINT_SECRET if configured; otherwise derives a domain-separated
+    key from SECRET_KEY via HMAC-SHA256 so raw JWT signing keys are never reused directly.
+    """
+    if settings.AUDIT_CHECKPOINT_SECRET and settings.AUDIT_CHECKPOINT_SECRET.strip():
+        return settings.AUDIT_CHECKPOINT_SECRET.strip().encode("utf-8")
+    return hmac.new(
+        settings.SECRET_KEY.encode("utf-8"),
+        b"uk-wci-audit-checkpoint-signing-key-v2",
+        hashlib.sha256,
+    ).digest()
+
+
 def compute_checkpoint_signature(sequence: int, last_id: int, last_hash: str, total_records: int) -> str:
     """Computes HMAC-SHA256 signature for independently protected audit checkpoints."""
     payload = f"{sequence}:{last_id}:{last_hash}:{total_records}".encode("utf-8")
-    key = settings.SECRET_KEY.encode("utf-8")
+    key = _get_checkpoint_hmac_key()
     return hmac.new(key, payload, hashlib.sha256).hexdigest()
 
 def create_signed_audit_checkpoint(db: Session) -> Optional[AuditCheckpoint]:
@@ -158,23 +173,47 @@ def verify_audit_log_chain(db: Session, verify_checkpoints: bool = True) -> Tupl
         return True, 0, None
 
     expected_prev = GENESIS_HASH
+    prev_id = 0
+    prev_epoch = 0
+    records_by_id: Dict[int, AuditLog] = {}
+
     for r in records:
+        if r.id <= prev_id:
+            return False, r.id, f"Audit sequence violation at record {r.id}: non-increasing ID following {prev_id}"
+        prev_id = r.id
+        records_by_id[r.id] = r
+
+        # Reject missing/empty prev_hash (blocks null/empty prev_hash bypass)
+        if not r.prev_hash or not str(r.prev_hash).strip():
+            return False, r.id, f"Tamper detected at audit record {r.id}: prev_hash is missing or empty"
+
         # Check chain link
-        if r.prev_hash and r.prev_hash != expected_prev:
-            return False, r.id, f"Audit chain break at record {r.id}: prev_hash mismatch (expected {expected_prev[:12]}, got {r.prev_hash[:12]})"
+        if r.prev_hash != expected_prev:
+            return False, r.id, (
+                f"Audit chain break at record {r.id}: prev_hash mismatch "
+                f"(expected {expected_prev[:12]}, got {str(r.prev_hash)[:12]})"
+            )
+
+        # Reject missing/empty record_hash (blocks null/empty record_hash bypass)
+        if not r.record_hash or not str(r.record_hash).strip():
+            return False, r.id, f"Tamper detected at audit record {r.id}: record_hash is missing or empty"
 
         # Calculate epoch
         ts = r.created_at
         if ts is None:
-            epoch_sec = 0
+            return False, r.id, f"Tamper detected at audit record {r.id}: created_at timestamp is missing"
         elif ts.tzinfo is None:
             epoch_sec = int(ts.replace(tzinfo=timezone.utc).timestamp())
         else:
             epoch_sec = int(ts.timestamp())
 
+        if epoch_sec < prev_epoch:
+            return False, r.id, f"Audit timestamp monotonicity violation at record {r.id}"
+        prev_epoch = epoch_sec
+
         # Verify integrity of record contents including user and provenance fields
         calc_hash = compute_record_hash(
-            prev_hash=r.prev_hash or expected_prev,
+            prev_hash=r.prev_hash,
             action=r.action,
             resource_type=r.resource_type,
             resource_id=r.resource_id,
@@ -185,33 +224,64 @@ def verify_audit_log_chain(db: Session, verify_checkpoints: bool = True) -> Tupl
             user_role=r.user_role,
             ip_address=r.ip_address
         )
-        if r.record_hash and r.record_hash != calc_hash:
+        if not hmac.compare_digest(str(r.record_hash), calc_hash):
             return False, r.id, f"Tamper detected at audit record {r.id}: record_hash recalculation failed"
 
-        if r.record_hash:
-            expected_prev = r.record_hash
+        expected_prev = r.record_hash
 
-    # Checkpoint verification: Detect truncation of tail records or unauthorized re-hashing
+    # Checkpoint verification: Verify ALL checkpoints in sequence, detect truncation or unauthorized re-hashing
     if verify_checkpoints:
-        latest_cp = db.query(AuditCheckpoint).order_by(AuditCheckpoint.checkpoint_sequence.desc()).first()
-        if latest_cp:
-            # 1. Verify HMAC signature of checkpoint
+        checkpoints = db.query(AuditCheckpoint).order_by(AuditCheckpoint.checkpoint_sequence.asc()).all()
+        expected_seq = 1
+        prev_cp_records = 0
+        for cp in checkpoints:
+            if cp.checkpoint_sequence != expected_seq:
+                return (
+                    False,
+                    len(records),
+                    f"Tamper detected: Missing or out-of-order audit checkpoint sequence "
+                    f"(expected {expected_seq}, got {cp.checkpoint_sequence})",
+                )
+            expected_seq += 1
+
+            if not cp.signature or not cp.last_record_hash:
+                return False, len(records), f"Checkpoint #{cp.checkpoint_sequence} missing signature or last_record_hash"
+
             expected_sig = compute_checkpoint_signature(
-                sequence=latest_cp.checkpoint_sequence,
-                last_id=latest_cp.last_audit_id,
-                last_hash=latest_cp.last_record_hash,
-                total_records=latest_cp.total_records
+                sequence=cp.checkpoint_sequence,
+                last_id=cp.last_audit_id,
+                last_hash=cp.last_record_hash,
+                total_records=cp.total_records,
             )
-            if not hmac.compare_digest(latest_cp.signature, expected_sig):
-                return False, len(records), "Checkpoint HMAC signature invalid: unauthorized checkpoint modification"
+            if not hmac.compare_digest(str(cp.signature), expected_sig):
+                return (
+                    False,
+                    len(records),
+                    f"Checkpoint #{cp.checkpoint_sequence} HMAC signature invalid: unauthorized checkpoint modification",
+                )
 
-            # 2. Check for log truncation
-            if len(records) < latest_cp.total_records:
-                return False, len(records), f"Tamper detected: Audit log was truncated! Found {len(records)} records, checkpoint requires {latest_cp.total_records}."
+            if cp.total_records < prev_cp_records:
+                return (
+                    False,
+                    len(records),
+                    f"Checkpoint #{cp.checkpoint_sequence} total_records decreased from {prev_cp_records} to {cp.total_records}",
+                )
+            prev_cp_records = cp.total_records
 
-            # 3. Check terminal record matching checkpoint
-            last_rec = records[-1]
-            if last_rec.id < latest_cp.last_audit_id or last_rec.record_hash != latest_cp.last_record_hash:
-                return False, len(records), f"Tamper detected: Terminal audit record hash mismatch against signed checkpoint."
+            if len(records) < cp.total_records:
+                return (
+                    False,
+                    len(records),
+                    f"Tamper detected: Audit log was truncated! Found {len(records)} records, "
+                    f"checkpoint #{cp.checkpoint_sequence} requires {cp.total_records}.",
+                )
+
+            target_rec = records_by_id.get(cp.last_audit_id)
+            if target_rec is None or target_rec.record_hash != cp.last_record_hash:
+                return (
+                    False,
+                    len(records),
+                    f"Tamper detected: Audit record #{cp.last_audit_id} hash mismatch against signed checkpoint #{cp.checkpoint_sequence}.",
+                )
 
     return True, len(records), None

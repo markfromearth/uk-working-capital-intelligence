@@ -8,14 +8,18 @@ This runbook provides step-by-step instructions for deploying, operating, monito
 
 The application is configured via environment variables. Ensure the following keys are provided in `.env` or injected by your container orchestrator:
 
-| Variable | Default (Local / Staging) | Production Recommendation | Purpose |
+| Variable | Default (Local / Staging) | Production Requirement | Purpose |
 | :--- | :--- | :--- | :--- |
-| `DATABASE_URL` | `sqlite:///./uk_working_capital.db` | `postgresql+psycopg2://user:pass@host:5432/db` | Database connection string |
-| `JWT_SECRET_KEY` | `dev_secret_change_in_production` | Strong random 256-bit token (`openssl rand -hex 32`) | API JWT signing |
-| `COMPANIES_HOUSE_API_KEY`| `simulated_key` | Real Companies House API key | Companies House REST / Stream API |
-| `CREDITSAFE_WEBHOOK_SECRET`| `dev_creditsafe_secret` | High-entropy shared HMAC key | Creditsafe webhook signature validation |
-| `ANTHROPIC_API_KEY` | `""` (Fallback to deterministic) | Real Anthropic API key | LLM natural-language prospect explanations |
-| `ENVIRONMENT` | `development` | `production` | Enables strict SSL and production hardening |
+| `DATABASE_URL` | `sqlite:///./uk_working_capital.db` | `postgresql+psycopg2://user:pass@host:5432/db` | Database connection string (rejects default `capital_password` in prod) |
+| `SECRET_KEY` | *(dev only)* | Strong random >= 32-char token (`openssl rand -hex 32`) | JWT HS256 signing secret (startup fails closed if weak/default in prod) |
+| `AUDIT_CHECKPOINT_SECRET` | *(derived domain-separated key)* | Dedicated >= 32-char HMAC secret | Domain-separated HMAC key for `AuditCheckpoint` signing |
+| `BOOTSTRAP_ADMIN_EMAIL` | `""` (Disabled) | Optional initial admin email | Explicit first-administrator bootstrap email (no hardcoded accounts) |
+| `BOOTSTRAP_ADMIN_PASSWORD` | `""` (Disabled) | Strong password (>= 12 chars) | Explicit first-administrator bootstrap password |
+| `DEMO_MODE` | `false` | `false` (mandatory in prod/staging) | Controls simulation fallback; startup fails closed if `true` in production |
+| `BACKEND_CORS_ORIGINS` | `http://localhost:8000,http://127.0.0.1:8000` | Explicit origin allowlist (no `*`) | Permitted cross-origin frontends |
+| `COMPANIES_HOUSE_API_KEY`| `""` | Real Companies House API key | Companies House REST / Stream API |
+| `CREDITSAFE_WEBHOOK_SECRET`| `""` (Fails closed if unset) | High-entropy shared HMAC key | Creditsafe webhook signature validation |
+| `ENVIRONMENT` | `development` | `production` or `staging` | Enforces fail-closed security validation on startup |
 
 ---
 

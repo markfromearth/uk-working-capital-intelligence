@@ -1,19 +1,20 @@
-name: CI Test & Quality Verification
+name: CI Security, Compliance & Quality Verification
 
 on:
   push:
-    branches: [ master, main ]
+    branches: [ marketing-focus, master, main ]
   pull_request:
-    branches: [ master, main ]
+    branches: [ marketing-focus, master, main ]
+  workflow_dispatch:
 
 jobs:
-  test:
+  verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Set up Python 3.9
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.9"
 
@@ -22,9 +23,26 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run Test Suite (Unit, Integration & Controlled Failure Tests)
+      - name: Verify Python bytecode compilation
+        run: |
+          python -m compileall -q backend tests
+
+      - name: Run Full Test Suite (Strict Mode: DEMO_MODE=false)
         env:
-          DEMO_MODE: true
-          DATABASE_URL: "sqlite:///./ci_test.db"
+          ENVIRONMENT: test
+          DEMO_MODE: "false"
+          SECRET_KEY: "ci_strict_test_signing_secret_key_with_high_entropy_32b_plus"
+          AUDIT_CHECKPOINT_SECRET: "ci_strict_checkpoint_hmac_key_domain_separated_32b_plus"
+          DATABASE_URL: "sqlite:///./ci_strict_test.db"
+        run: |
+          PYTHONPATH=. pytest -v tests/ --durations=10
+
+      - name: Run Full Test Suite (Simulation Mode: DEMO_MODE=true)
+        env:
+          ENVIRONMENT: development
+          DEMO_MODE: "true"
+          SECRET_KEY: "ci_demo_test_signing_secret_key_with_high_entropy_32b_plus"
+          AUDIT_CHECKPOINT_SECRET: "ci_demo_checkpoint_hmac_key_domain_separated_32b_plus"
+          DATABASE_URL: "sqlite:///./ci_demo_test.db"
         run: |
           PYTHONPATH=. pytest -v tests/ --durations=10

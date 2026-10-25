@@ -135,6 +135,8 @@ class MultiAgentOrchestrator:
         trace.task_traces.append(res_d)
 
         # --- STEP 5: Marketing Channel Research (Agent E) ---
+        resolved_sic_codes = res_b.output_payload.get("sic_codes") or ["49410"]
+        resolved_company_type = res_b.output_payload.get("company_type")
         req_e = AgentTaskRequest(
             correlation_id=cid,
             target_role=AgentRole.MARKETING_RESEARCH,
@@ -142,7 +144,7 @@ class MultiAgentOrchestrator:
             budget_limit_gbp=remaining_budget,
             input_payload={
                 "company_name": trace.company_name,
-                "sic_codes": ["49410"],
+                "sic_codes": resolved_sic_codes,
                 "sector_keyword": "commercial transport",
             },
             provenance_chain=[r.task_id for r in prior_results],
@@ -154,6 +156,24 @@ class MultiAgentOrchestrator:
         trace.task_traces.append(res_e)
 
         # --- STEP 6: Audience & Content Strategy (Agent F) ---
+        detected_signals = res_a.output_payload.get("signals", [])
+        has_distress = bool(res_a.output_payload.get("has_distress_signals", False))
+        active_charges = sum(1 for s in detected_signals if s.get("signal_type") == "charge_creation")
+        derived_indicators: List[str] = []
+        if not has_distress:
+            for s in detected_signals:
+                stype = s.get("signal_type")
+                if stype == "contract_award_growth" and "contract_award_growth" not in derived_indicators:
+                    derived_indicators.append("contract_award_growth")
+                elif stype == "charge_satisfaction_mr04" and active_charges == 0 and "white_space" not in derived_indicators:
+                    derived_indicators.append("white_space")
+                elif stype == "charge_creation" and "refinance_window" not in derived_indicators:
+                    derived_indicators.append("refinance_window")
+                elif stype in ("dbt_increase", "headcount_surge", "accounts_balance_sheet_extracted") and stype not in derived_indicators:
+                    derived_indicators.append(stype)
+            if not derived_indicators and res_d.output_payload.get("estimated_facility_size_gbp", 0.0) > 0.0:
+                derived_indicators.append("working_capital_expansion")
+
         req_f = AgentTaskRequest(
             correlation_id=cid,
             target_role=AgentRole.AUDIENCE_STRATEGY,
@@ -161,7 +181,9 @@ class MultiAgentOrchestrator:
             budget_limit_gbp=remaining_budget,
             input_payload={
                 "company_name": trace.company_name,
-                "indicators": ["contract_award_growth", "white_space"],
+                "indicators": derived_indicators,
+                "has_active_charges": active_charges > 0,
+                "active_charge_count": active_charges,
                 "facility_size_gbp": res_d.output_payload.get("estimated_facility_size_gbp", 350_000.0),
                 "channels": res_e.output_payload.get("channel_candidates", []),
             },
@@ -201,7 +223,7 @@ class MultiAgentOrchestrator:
             budget_limit_gbp=remaining_budget,
             input_payload={
                 "action": "ISSUE_CODE",
-                "strategy_id": res_f.output_payload.get("primary_recommended_strategy_id"),
+                "strategy_id": res_f.output_payload.get("primary_recommended_strategy_id") or "STRAT-PENDING",
                 "channel_name": (res_e.output_payload.get("channel_candidates", [{}])[0].get("channel_name", "Industry Podcast")),
                 "channel_type": "PODCAST",
                 "content_format": "PODCAST_SPONSORSHIP",
@@ -222,7 +244,7 @@ class MultiAgentOrchestrator:
             crn=norm_crn,
             budget_limit_gbp=remaining_budget,
             input_payload={
-                "company_type": "ltd",
+                "company_type": resolved_company_type,
                 "urls_to_verify": [
                     c.get("website_uri")
                     for c in res_e.output_payload.get("channel_candidates", [])
@@ -251,13 +273,38 @@ class MultiAgentOrchestrator:
         res_j = await self.verification_agent.execute(req_j)
         trace.task_traces.append(res_j)
 
-        # Finalize Execution Trace
+        # Finalize Execution Trace & Enforce Post-Compliance / Post-Verification Gate on Campaign Tracking
         trace.total_cost_gbp = accumulated_cost
         trace.total_duration_ms = (time.time() - start_time) * 1000.0
         v_out = res_j.output_payload
         trace.is_fully_verified = v_out.get("is_fully_verified", False)
-        if not trace.is_fully_verified:
+        if trace.is_fully_verified:
+            for t in trace.task_traces:
+                if t.status == AgentTaskStatus.COMPLETED:
+                    t.is_verified = True
+        else:
             trace.rejection_reason = "; ".join(v_out.get("failures", ["Audit failed"]))
+            issued_cid = (res_h.output_payload or {}).get("campaign_id")
+            if issued_cid:
+                try:
+                    from backend.app.database import SessionLocal
+                    from backend.app.models.marketing import CampaignTrackingRecord
+                    db_gate = SessionLocal()
+                    try:
+                        rec = (
+                            db_gate.query(CampaignTrackingRecord)
+                            .filter(CampaignTrackingRecord.campaign_id == issued_cid)
+                            .first()
+                        )
+                        if rec:
+                            is_comp_failed = (res_i.output_payload or {}).get("is_compliance_cleared") is False
+                            rec.status = "SUPPRESSED" if is_comp_failed else "CANCELLED"
+                            db_gate.commit()
+                            res_h.output_payload["status"] = rec.status
+                    finally:
+                        db_gate.close()
+                except Exception as gate_err:
+                    logger.warning(f"Failed to revoke campaign {issued_cid} after verification rejection: {gate_err}")
 
         logger.info(
             f"Multi-Agent pipeline completed for {norm_crn} in {trace.total_duration_ms:.1f}ms "

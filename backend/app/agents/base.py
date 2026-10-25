@@ -40,8 +40,8 @@ class BaseAgent(ABC):
 
             duration_ms = (time.time() - start_time) * 1000.0
 
-            # Budget overflow check
-            if cost_gbp > request.budget_limit_gbp and request.budget_limit_gbp > 0.0:
+            # Budget overflow check (strictly enforces £0.00 free mode as well as positive budgets)
+            if cost_gbp > request.budget_limit_gbp:
                 logger.warning(f"Agent [{self.role.value}] exceeded budget (£{cost_gbp:.2f} > £{request.budget_limit_gbp:.2f})")
                 return AgentTaskResult(
                     task_id=request.task_id,
