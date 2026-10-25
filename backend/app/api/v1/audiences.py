@@ -55,10 +55,7 @@ def list_audience_activations(
     """Lists audience activations with compliance and execution statuses."""
     query = db.query(AudienceActivation)
     if (current_user.role or "").upper() not in ("ADMIN", "ANALYST"):
-        query = query.filter(
-            (AudienceActivation.requester_user_id == current_user.id)
-            | (AudienceActivation.requester_user_id.is_(None))
-        )
+        query = query.filter(AudienceActivation.requester_user_id == current_user.id)
     if crn:
         norm_crn, valid, _ = normalize_uk_crn(crn)
         if valid and norm_crn:
@@ -97,7 +94,6 @@ def get_activation_detail(
         raise HTTPException(status_code=404, detail="Activation not found.")
     if (
         (current_user.role or "").upper() not in ("ADMIN", "ANALYST")
-        and a.requester_user_id
         and a.requester_user_id != current_user.id
     ):
         raise HTTPException(status_code=403, detail="Access denied: You do not own this audience activation.")
@@ -209,7 +205,6 @@ def execute_activation(
         raise HTTPException(status_code=404, detail="Activation not found.")
     if (
         (current_user.role or "").upper() not in ("ADMIN", "ANALYST")
-        and a.requester_user_id
         and a.requester_user_id != current_user.id
     ):
         raise HTTPException(status_code=403, detail="Access denied: You do not own this audience activation.")
@@ -234,7 +229,6 @@ def record_campaign_performance(
         raise HTTPException(status_code=404, detail="Activation not found.")
     if (
         (current_user.role or "").upper() not in ("ADMIN", "ANALYST")
-        and a.requester_user_id
         and a.requester_user_id != current_user.id
     ):
         raise HTTPException(status_code=403, detail="Access denied: You do not own this audience activation.")

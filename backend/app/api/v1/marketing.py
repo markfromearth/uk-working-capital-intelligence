@@ -268,10 +268,7 @@ def list_tracked_campaigns(
     """Lists active and historical tracked campaigns visible to the authenticated user."""
     q = db.query(CampaignTrackingRecord)
     if (current_user.role or "").upper() not in ("ADMIN", "ANALYST"):
-        q = q.filter(
-            (CampaignTrackingRecord.owner_user_id == current_user.id)
-            | (CampaignTrackingRecord.owner_user_id.is_(None))
-        )
+        q = q.filter(CampaignTrackingRecord.owner_user_id == current_user.id)
     if crn:
         norm_crn, valid, _ = normalize_uk_crn(crn)
         if valid and norm_crn:

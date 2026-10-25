@@ -227,17 +227,14 @@ class OutcomeLearningService:
         if not record:
             raise ValueError(f"Campaign tracking ID '{campaign_id}' does not exist.")
 
-        # Enforce ownership when both record.owner_user_id and actor_user_id are present
+        # Enforce strict ownership when actor_user_id is present:
+        # Non-privileged users (e.g., BROKER) may only access campaigns they explicitly own (never unowned/system campaigns).
         is_privileged = (actor_role or "").upper() in ("ADMIN", "ANALYST")
-        if (
-            record.owner_user_id
-            and actor_user_id
-            and record.owner_user_id != actor_user_id
-            and not is_privileged
-        ):
-            raise PermissionError(
-                f"Access denied: User '{actor_user_id}' does not own campaign '{campaign_id}'."
-            )
+        if actor_user_id and not is_privileged:
+            if not record.owner_user_id or str(record.owner_user_id) != str(actor_user_id):
+                raise PermissionError(
+                    f"Access denied: User '{actor_user_id}' does not own campaign '{campaign_id}'."
+                )
 
         if require_active and record.status in ("CANCELLED", "SUPPRESSED"):
             raise ValueError(

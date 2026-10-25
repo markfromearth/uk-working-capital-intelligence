@@ -213,6 +213,39 @@ def test_campaign_ownership_isolation_and_state_transitions():
     admin_metrics = client.get(f"/api/v1/marketing/campaigns/metrics?campaign_id={cid}", headers=headers_admin)
     assert admin_metrics.status_code == 200
 
+    # 9. System/orchestrator campaign (owner_user_id=None) cannot be modified or injected by a BROKER
+    from backend.app.services.outcome_learning import OutcomeLearningService
+    db = SessionLocal()
+    try:
+        sys_rec = OutcomeLearningService(db).issue_campaign_tracking_id(
+            strategy_id="STRAT-SYSTEM-ONLY",
+            channel_name="System Automated Channel",
+            channel_type="PODCAST",
+            content_format="PODCAST_SPONSORSHIP",
+            crn="08931201",
+            owner_user_id=None,
+        )
+        sys_cid = sys_rec.campaign_id
+    finally:
+        db.close()
+
+    broker_sys_inject = client.post(
+        "/api/v1/marketing/campaigns/outcomes",
+        json={"campaign_id": sys_cid, "event_type": "CLICK", "crn": "08931201"},
+        headers=headers_a,
+    )
+    assert broker_sys_inject.status_code == 403
+
+    broker_sys_status = client.post(
+        f"/api/v1/marketing/campaigns/{sys_cid}/status",
+        json={"target_status": "CANCELLED"},
+        headers=headers_a,
+    )
+    assert broker_sys_status.status_code == 403
+
+    admin_sys_metrics = client.get(f"/api/v1/marketing/campaigns/metrics?campaign_id={sys_cid}", headers=headers_admin)
+    assert admin_sys_metrics.status_code == 200
+
 
 def test_csv_validation_limits_and_deduplication():
     """
