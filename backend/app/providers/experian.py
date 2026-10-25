@@ -18,7 +18,7 @@ class ExperianAdapter(IProviderAdapter):
     """
 
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or settings.EXPERIAN_API_KEY
+        self.api_key = settings.EXPERIAN_API_KEY if api_key is None else api_key
         self._is_live = bool(self.api_key and self.api_key.strip() and self.api_key != "mock_key")
 
     @property
@@ -110,6 +110,13 @@ class ExperianAdapter(IProviderAdapter):
             "confidence_score": 0.85,
             "evidence_reference": f"Experian Commercial Risk Advisory (Simulated for {crn})",
             "decay_half_life_days": 90,
-            "verification_status": "verified",
-            "metadata_json": json.dumps({"reduction_pct": 35.0})
+            "verification_status": "simulated",
+            "provenance_details": json.dumps({
+                "mode": "SIMULATED",
+                "provider": self.provider_name,
+                "license_classification": "COMMERCIAL_SUBSCRIPTION_SIMULATED",
+                "freshness_status": "SIMULATED",
+                "retrieval_timestamp": now.isoformat(),
+            }),
+            "metadata_json": json.dumps({"reduction_pct": 35.0, "is_simulated": True})
         }]

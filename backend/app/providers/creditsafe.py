@@ -20,8 +20,8 @@ class CreditsafeAdapter(IProviderAdapter):
     """
 
     def __init__(self, api_key: Optional[str] = None, webhook_secret: Optional[str] = None):
-        self.api_key = api_key or settings.CREDITSAFE_API_KEY
-        self.webhook_secret = webhook_secret or settings.CREDITSAFE_WEBHOOK_SECRET
+        self.api_key = settings.CREDITSAFE_API_KEY if api_key is None else api_key
+        self.webhook_secret = settings.CREDITSAFE_WEBHOOK_SECRET if webhook_secret is None else webhook_secret
         self._is_live = bool(self.api_key and self.api_key.strip() and self.api_key != "mock_key")
 
     @property
@@ -197,11 +197,19 @@ class CreditsafeAdapter(IProviderAdapter):
         """
         Generates realistic, deterministic commercial credit risk data.
         Notice: DBT is explicitly tracked; DSO is NEVER fabricated from DBT.
+        Explicitly marks verification_status='simulated' so simulated signals cannot masquerade as live verified records.
         """
         h = int(hashlib.md5(crn.encode()).hexdigest(), 16)
         pattern = h % 4
         now = datetime.now(timezone.utc)
         signals = []
+        prov = json.dumps({
+            "mode": "SIMULATED",
+            "provider": self.provider_name,
+            "license_classification": "COMMERCIAL_SUBSCRIPTION_SIMULATED",
+            "freshness_status": "SIMULATED",
+            "retrieval_timestamp": now.isoformat(),
+        })
 
         if pattern in (0, 1):  # Elevated DBT scenario
             dbt_days = 28.5 if pattern == 0 else 18.0
@@ -218,8 +226,9 @@ class CreditsafeAdapter(IProviderAdapter):
                 "confidence_score": 0.90,
                 "evidence_reference": f"Creditsafe Commercial Risk Trade Registry (Simulated for {crn})",
                 "decay_half_life_days": 60,
-                "verification_status": "verified",
-                "metadata_json": json.dumps({"dbt_days": dbt_days, "benchmark_industry_dbt": 8.5})
+                "verification_status": "simulated",
+                "provenance_details": prov,
+                "metadata_json": json.dumps({"dbt_days": dbt_days, "benchmark_industry_dbt": 8.5, "is_simulated": True})
             })
 
         if pattern == 0:  # Also has credit score downgrade
@@ -237,8 +246,9 @@ class CreditsafeAdapter(IProviderAdapter):
                 "confidence_score": 0.88,
                 "evidence_reference": f"Creditsafe Rating History (Simulated for {crn})",
                 "decay_half_life_days": 90,
-                "verification_status": "verified",
-                "metadata_json": json.dumps({"previous_score": 64, "new_score": 42, "rating_band": "Moderate-High Risk"})
+                "verification_status": "simulated",
+                "provenance_details": prov,
+                "metadata_json": json.dumps({"previous_score": 64, "new_score": 42, "rating_band": "Moderate-High Risk", "is_simulated": True})
             })
 
         return signals

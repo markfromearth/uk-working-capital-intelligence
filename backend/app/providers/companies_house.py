@@ -21,7 +21,7 @@ class CompaniesHouseAdapter(IProviderAdapter, IStreamingAdapter):
     """
 
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or settings.COMPANIES_HOUSE_API_KEY
+        self.api_key = settings.COMPANIES_HOUSE_API_KEY if api_key is None else api_key
         self._is_live = bool(self.api_key and self.api_key.strip() and self.api_key != "mock_key")
 
     @property
@@ -260,7 +260,8 @@ class CompaniesHouseAdapter(IProviderAdapter, IStreamingAdapter):
                 },
                 "persons_entitled": [{"name": "Barclays Bank PLC"}],
                 "particulars": {"description": "All present and future freehold and leasehold property and book debts."},
-                "links": {"self": f"/company/{crn}/charges/chg-{crn}-001"}
+                "links": {"self": f"/company/{crn}/charges/chg-{crn}-001"},
+                "_simulated": True,
             })
 
         if pattern == 0:
@@ -275,7 +276,8 @@ class CompaniesHouseAdapter(IProviderAdapter, IStreamingAdapter):
                     "description": "Mortgage debenture"
                 },
                 "persons_entitled": [{"name": "HSBC UK Bank PLC"}],
-                "links": {"self": f"/company/{crn}/charges/chg-{crn}-002"}
+                "links": {"self": f"/company/{crn}/charges/chg-{crn}-002"},
+                "_simulated": True,
             })
 
         return charges
@@ -387,11 +389,20 @@ class CompaniesHouseAdapter(IProviderAdapter, IStreamingAdapter):
         }
 
     def _parse_charge_into_signals(self, crn: str, charge: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Parses charge record into normalized signal dictionaries."""
+        """Parses charge record into normalized signal dictionaries with explicit LIVE vs SIMULATED provenance."""
         signals = []
         charge_id = charge.get("id", "unknown")
         status = charge.get("status", "").lower()
         satisfied_on = charge.get("satisfied_on")
+        is_sim = bool(charge.get("_simulated", not self._is_live))
+        v_status = "simulated" if is_sim else "verified"
+        prov_details = json.dumps({
+            "mode": "SIMULATED" if is_sim else "LIVE",
+            "provider": self.provider_name,
+            "license_classification": "OGL_v3.0_SIMULATED" if is_sim else "OGL_v3.0",
+            "freshness_status": "CURRENT",
+            "retrieval_timestamp": datetime.now(timezone.utc).isoformat(),
+        })
         
         if status in ("fully-satisfied", "partially-satisfied") and satisfied_on:
             try:
@@ -413,11 +424,13 @@ class CompaniesHouseAdapter(IProviderAdapter, IStreamingAdapter):
                 "confidence_score": 0.95 if is_full else 0.80,
                 "evidence_reference": f"https://find-and-update.company-information.service.gov.uk/company/{crn}/charges/{charge_id}",
                 "decay_half_life_days": 90,
-                "verification_status": "verified",
+                "verification_status": v_status,
+                "provenance_details": prov_details,
                 "metadata_json": json.dumps({
                     "charge_id": charge_id,
                     "scope": "full" if is_full else "partial",
-                    "persons_entitled": [p.get("name") for p in charge.get("persons_entitled", [])]
+                    "persons_entitled": [p.get("name") for p in charge.get("persons_entitled", [])],
+                    "is_simulated": is_sim,
                 })
             })
             
@@ -441,7 +454,8 @@ class CompaniesHouseAdapter(IProviderAdapter, IStreamingAdapter):
                     "confidence_score": 0.90,
                     "evidence_reference": f"https://find-and-update.company-information.service.gov.uk/company/{crn}/charges/{charge_id}",
                     "decay_half_life_days": 180,
-                    "verification_status": "verified",
-                    "metadata_json": json.dumps({"charge_id": charge_id})
+                    "verification_status": v_status,
+                    "provenance_details": prov_details,
+                    "metadata_json": json.dumps({"charge_id": charge_id, "is_simulated": is_sim})
                 })
         return signals

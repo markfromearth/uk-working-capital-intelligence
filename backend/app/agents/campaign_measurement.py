@@ -82,11 +82,14 @@ class CampaignMeasurementAgent(BaseAgent):
 
             else:  # MEASURE_OUTCOMES or UPDATE_PRIORS
                 cid = request.input_payload.get("campaign_id")
-                metrics = service.compute_empirical_campaign_conversion_rates(campaign_id=cid)
+                as_of = request.input_payload.get("as_of")
+                metrics = service.compute_empirical_campaign_conversion_rates(campaign_id=cid, as_of=as_of)
+                observed_trials = max(int(metrics["applications"]), int(metrics["funded_deals"]))
                 priors = service.update_bayesian_evoi_priors(
                     channel_type=request.input_payload.get("channel_type", "PODCAST"),
-                    observed_successes=metrics["funded_deals"],
-                    observed_trials=max(1, metrics["applications"]),
+                    observed_successes=int(metrics["funded_deals"]),
+                    observed_trials=observed_trials,
+                    as_of=as_of,
                 )
                 output_payload = {
                     "action": "MEASURE_OUTCOMES",

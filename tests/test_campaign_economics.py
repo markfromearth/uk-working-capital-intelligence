@@ -59,6 +59,8 @@ def test_break_even_and_test_budget_math():
     assert model.max_recommended_test_budget_gbp <= cost
 
     # Test zero-cost campaign handling
+    # Note (Rule 3.2 & Phase 7 Req 1): Replaced defective magic sentinel `roi_multiple == 999.0`
+    # with `roi_multiple is None` and explicit `roi_status == "not_applicable_zero_cost"`.
     zero_cost_model = CampaignEconomicsService.calculate_economics(
         facility_size_gbp=facility,
         campaign_cost_gbp=0.0,
@@ -66,7 +68,8 @@ def test_break_even_and_test_budget_math():
     )
     assert zero_cost_model.break_even_response_rate == 0.0
     assert zero_cost_model.break_even_qualified_leads == 0.0
-    assert zero_cost_model.scenarios[ScenarioType.BASE.value].roi_multiple == 999.0
+    assert zero_cost_model.scenarios[ScenarioType.BASE.value].roi_multiple is None
+    assert zero_cost_model.scenarios[ScenarioType.BASE.value].roi_status == "not_applicable_zero_cost"
     assert zero_cost_model.max_recommended_test_budget_gbp <= 500.0
 
 

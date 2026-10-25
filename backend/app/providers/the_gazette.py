@@ -5,11 +5,12 @@ notices under Open Government Licence / Crown Copyright (100% Free).
 """
 
 from datetime import datetime, timezone
+import json
 from typing import Any, Dict, List, Optional
-import httpx
 
 from backend.app.core.crn_normalizer import normalize_uk_crn
 from backend.app.core.logging import logger
+from backend.app.core.ssrf_protection import SafeHttpClient
 from backend.app.providers.base import (
     AdapterHealthStatus,
     IProviderAdapter,
@@ -49,7 +50,7 @@ class GazetteAdapter(IProviderAdapter):
         )
 
     async def search_insolvency_live(self, company_name_or_crn: str) -> List[Dict[str, Any]]:
-        """Live search of The Gazette for corporate insolvency notices."""
+        """Live search of The Gazette for corporate insolvency notices via SSRF-hardened SafeHttpClient."""
         url = f"{THE_GAZETTE_NOTICES_BASE}/data.json"
         params = {
             "text": company_name_or_crn,
@@ -57,13 +58,13 @@ class GazetteAdapter(IProviderAdapter):
             "results-page-size": 5,
         }
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.get(url, params=params)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    return data.get("entry", []) or []
-                logger.warning(f"The Gazette returned status {resp.status_code}")
-                return []
+            client = SafeHttpClient(timeout_seconds=10.0)
+            resp = await client.get_async(url, params=params, headers={"Accept": "application/json"})
+            if resp.status_code == 200:
+                data = resp.json()
+                return data.get("entry", []) or []
+            logger.warning(f"The Gazette returned status {resp.status_code}")
+            return []
         except Exception as e:
             logger.warning(f"The Gazette live lookup failed: {e}")
             return []
@@ -71,7 +72,7 @@ class GazetteAdapter(IProviderAdapter):
     def fetch_company_signals(self, raw_crn: str) -> List[Dict[str, Any]]:
         """
         Fetch statutory insolvency signals for a UK company CRN.
-        Returns normalized signal payloads.
+        Returns normalized signal payloads with explicit provenance metadata (FIXTURE vs LIVE).
         """
         norm_crn, valid, _ = normalize_uk_crn(raw_crn)
         if not valid or not norm_crn:
@@ -91,6 +92,9 @@ class GazetteAdapter(IProviderAdapter):
                 obs_dt = datetime.now(timezone.utc)
 
             uri = str(notice.get("uri", f"https://www.thegazette.co.uk/notice/{notice_id}"))
+            is_live_notice = bool(notice.get("_live", False))
+            v_status = notice.get("verification_status", "verified" if is_live_notice else "fixture")
+            prov_mode = "LIVE" if is_live_notice else "FIXTURE"
 
             sig = {
                 "crn": norm_crn,
@@ -105,10 +109,20 @@ class GazetteAdapter(IProviderAdapter):
                 "confidence_score": 1.0,  # Official statutory gazette
                 "evidence_reference": uri,
                 "decay_half_life_days": 365,
-                "verification_status": "verified",
+                "verification_status": v_status,
                 "data_use_restrictions": "crown_copyright_ogl_v3",
-                "provenance_details": f"the_gazette_notice:notice_id={notice_id}",
-                "metadata_json": f'{{"notice_code": "{notice.get("notice_code", "")}", "category": "Corporate Insolvency"}}',
+                "provenance_details": json.dumps({
+                    "source": "the_gazette_notice",
+                    "notice_id": notice_id,
+                    "mode": prov_mode,
+                    "license_classification": "OGL_v3.0_CROWN_COPYRIGHT",
+                    "retrieval_timestamp": datetime.now(timezone.utc).isoformat(),
+                }),
+                "metadata_json": json.dumps({
+                    "notice_code": notice.get("notice_code", ""),
+                    "category": "Corporate Insolvency",
+                    "provenance_mode": prov_mode,
+                }),
             }
             signals.append(sig)
 

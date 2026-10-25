@@ -19,9 +19,15 @@ class AudienceStrategyAgent(BaseAgent):
         self, request: AgentTaskRequest
     ) -> Tuple[Dict[str, Any], List[Dict[str, Any]], float]:
         company_name = request.input_payload.get("company_name", f"Company {request.crn}")
-        indicators = request.input_payload.get("indicators", ["contract_award_growth", "white_space"])
+        indicators = request.input_payload.get("indicators", [])
         facility_size = float(request.input_payload.get("facility_size_gbp", 350_000.0))
         channels = request.input_payload.get("channels", [])
+        has_active_charges = bool(request.input_payload.get("has_active_charges", False))
+        active_charge_count = int(request.input_payload.get("active_charge_count", 0))
+        verification_status = str(request.input_payload.get("verification_status", "VERIFIED"))
+        data_freshness_status = str(request.input_payload.get("data_freshness_status", "CURRENT"))
+        entity_resolution_confidence = float(request.input_payload.get("entity_resolution_confidence", 0.90))
+        evidence_ids = request.input_payload.get("evidence_ids")
 
         service = CampaignStrategyService()
         strategies = service.generate_strategies(
@@ -30,6 +36,12 @@ class AudienceStrategyAgent(BaseAgent):
             triggered_indicators=indicators,
             indicative_facility_gbp=facility_size,
             available_channels=channels,
+            has_active_charges=has_active_charges,
+            active_charge_count=active_charge_count,
+            verification_status=verification_status,
+            data_freshness_status=data_freshness_status,
+            entity_resolution_confidence=entity_resolution_confidence,
+            evidence_ids=evidence_ids,
         )
 
         evidence_refs: List[Dict[str, Any]] = []

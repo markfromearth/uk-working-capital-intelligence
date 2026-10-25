@@ -17,6 +17,13 @@ from backend.app.services.outcome_learning import OutcomeLearningService
 @pytest.fixture(scope="module", autouse=True)
 def setup_tables():
     Base.metadata.create_all(bind=engine)
+    db = SessionLocal()
+    try:
+        db.query(CampaignOutcomeEvent).delete()
+        db.query(CampaignTrackingRecord).delete()
+        db.commit()
+    finally:
+        db.close()
     yield
 
 

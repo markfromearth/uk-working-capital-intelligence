@@ -90,11 +90,13 @@ class CampaignEconomicsService:
             gross_commission = round(funded_deals * clean_facility * comm_rate, 2)
             net_value = round(gross_commission - clean_cost, 2)
 
-            roi_multiple = (
-                round(gross_commission / clean_cost, 2)
-                if clean_cost > 0.0
-                else (999.0 if gross_commission > 0 else 1.0)
-            )
+            if clean_cost > 0.0:
+                roi_multiple: Optional[float] = round(gross_commission / clean_cost, 2)
+                roi_status = "COMPUTED"
+            else:
+                roi_multiple = None
+                roi_status = "not_applicable_zero_cost"
+
             cost_per_qual_lead = (
                 round(clean_cost / qualified_leads, 2) if qualified_leads > 0 else 0.0
             )
@@ -117,6 +119,7 @@ class CampaignEconomicsService:
                 campaign_cost_gbp=clean_cost,
                 net_value_gbp=net_value,
                 roi_multiple=roi_multiple,
+                roi_status=roi_status,
                 cost_per_qualified_lead_gbp=cost_per_qual_lead,
                 customer_acquisition_cost_gbp=cac,
             )
@@ -175,6 +178,12 @@ class CampaignEconomicsService:
         else:
             risk = "ELEVATED_RISK: Negative or borderline expected net value; recommend zero-cost validation only"
 
+        evidence_basis = (
+            "EMPIRICAL_OBSERVED"
+            if (is_historical_benchmark and observed_rates)
+            else "ILLUSTRATIVE_PRIOR_BENCHMARK"
+        )
+
         return CampaignEconomicsModel(
             strategy_id=strategy_id,
             indicative_facility_size_gbp=clean_facility,
@@ -186,6 +195,7 @@ class CampaignEconomicsService:
             max_recommended_test_budget_gbp=max_test_budget,
             expected_net_value_gbp=expected_net_value,
             is_historical_benchmark=is_historical_benchmark,
+            evidence_basis=evidence_basis,
             assumptions_log=assumptions,
             risk_assessment=risk,
         )

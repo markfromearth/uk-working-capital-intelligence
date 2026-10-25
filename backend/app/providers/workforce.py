@@ -19,7 +19,7 @@ class WorkforceAdapter(IProviderAdapter):
     """
 
     def __init__(self, api_key: Optional[str] = None):
-        self.api_key = api_key or settings.PROXYCURL_API_KEY
+        self.api_key = settings.PROXYCURL_API_KEY if api_key is None else api_key
         self._is_live = bool(self.api_key and self.api_key.strip() and self.api_key != "mock_key")
 
     @property
@@ -176,6 +176,14 @@ class WorkforceAdapter(IProviderAdapter):
         acceleration_pct = annualized_30d - annualized_90d
 
         signals = []
+        v_status = "verified" if self._is_live else "simulated"
+        prov_details = json.dumps({
+            "mode": "LIVE" if self._is_live else "SIMULATED",
+            "provider": self.provider_name,
+            "license_classification": "AGGREGATE_WORKFORCE_LIVE" if self._is_live else "AGGREGATE_WORKFORCE_SIMULATED",
+            "freshness_status": "CURRENT" if data_freshness_days <= 30 else "STALE",
+            "retrieval_timestamp": datetime.now(timezone.utc).isoformat(),
+        })
         if growth_90d_pct >= 15.0:  # Material headcount surge (cash burn pressure)
             signals.append({
                 "crn": crn,
@@ -190,14 +198,16 @@ class WorkforceAdapter(IProviderAdapter):
                 "confidence_score": round(spacing_confidence, 2),
                 "evidence_reference": f"Workforce Observation Series ({obs_count} dated points)",
                 "decay_half_life_days": 90,
-                "verification_status": "verified",
+                "verification_status": v_status,
+                "provenance_details": prov_details,
                 "metadata_json": json.dumps({
                     "current_headcount": current_hc,
                     "headcount_90d_ago": hc_90,
                     "growth_30d_pct": round(growth_30d_pct, 1),
                     "growth_90d_pct": round(growth_90d_pct, 1),
                     "acceleration_pct": round(acceleration_pct, 1),
-                    "observation_count": obs_count
+                    "observation_count": obs_count,
+                    "is_simulated": not self._is_live,
                 })
             })
         elif growth_90d_pct <= -10.0:  # Material workforce reduction
@@ -214,14 +224,16 @@ class WorkforceAdapter(IProviderAdapter):
                 "confidence_score": round(spacing_confidence, 2),
                 "evidence_reference": f"Workforce Observation Series ({obs_count} dated points)",
                 "decay_half_life_days": 90,
-                "verification_status": "verified",
+                "verification_status": v_status,
+                "provenance_details": prov_details,
                 "metadata_json": json.dumps({
                     "current_headcount": current_hc,
                     "headcount_90d_ago": hc_90,
                     "growth_30d_pct": round(growth_30d_pct, 1),
                     "growth_90d_pct": round(growth_90d_pct, 1),
                     "acceleration_pct": round(acceleration_pct, 1),
-                    "observation_count": obs_count
+                    "observation_count": obs_count,
+                    "is_simulated": not self._is_live,
                 })
             })
         else:  # Verified stable observation
@@ -238,13 +250,15 @@ class WorkforceAdapter(IProviderAdapter):
                 "confidence_score": round(spacing_confidence, 2),
                 "evidence_reference": f"Workforce Observation Series ({obs_count} dated points)",
                 "decay_half_life_days": 90,
-                "verification_status": "verified",
+                "verification_status": v_status,
+                "provenance_details": prov_details,
                 "metadata_json": json.dumps({
                     "current_headcount": current_hc,
                     "headcount_90d_ago": hc_90 or current_hc,
                     "growth_30d_pct": round(growth_30d_pct, 1),
                     "growth_90d_pct": round(growth_90d_pct, 1),
-                    "observation_count": obs_count
+                    "observation_count": obs_count,
+                    "is_simulated": not self._is_live,
                 })
             })
             
