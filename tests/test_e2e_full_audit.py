@@ -6,11 +6,32 @@ and Companies House statutory calculations across the entire stack.
 
 import pytest
 from fastapi.testclient import TestClient
+from backend.app.core.security import create_access_token, hash_password
+from backend.app.database import SessionLocal, init_db
 from backend.app.main import app
+from backend.app.models.user import User
 
 @pytest.fixture
 def client():
-    return TestClient(app)
+    init_db()
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == "e2e_audit_broker@test.co.uk").first()
+        if not user:
+            user = User(
+                email="e2e_audit_broker@test.co.uk",
+                hashed_password=hash_password("E2EAuditBroker2026!"),
+                full_name="E2E Audit Broker",
+                role="broker",
+                is_active=1,
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        token = create_access_token(subject=user.id, role=user.role)
+    finally:
+        db.close()
+    return TestClient(app, headers={"Authorization": f"Bearer {token}"})
 
 
 def test_e2e_frontend_html_integrity(client):

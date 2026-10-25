@@ -10,9 +10,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from backend.app.api.v1.auth import get_current_user, require_role
 from backend.app.core.crn_normalizer import normalize_uk_crn
 from backend.app.database import get_db
 from backend.app.models.marketing import CampaignOutcomeEvent, CampaignTrackingRecord
+from backend.app.models.user import User
 from backend.app.schemas.marketing import CampaignEconomicsModel, CampaignStrategy
 from backend.app.services.campaign_economics import CampaignEconomicsService
 from backend.app.services.campaign_strategy import CampaignStrategyService
@@ -20,6 +22,8 @@ from backend.app.services.marketing_discovery import MarketingChannelDiscoverySe
 from backend.app.services.outcome_learning import OutcomeLearningService
 
 router = APIRouter(prefix="/marketing", tags=["Marketing Intelligence & Activation"])
+
+ALL_AUTHENTICATED_ROLES = ["ADMIN", "admin", "ANALYST", "analyst", "BROKER", "broker"]
 
 
 # --- Schemas ---
@@ -31,6 +35,9 @@ class GenerateStrategiesRequest(BaseModel):
         default_factory=lambda: ["contract_award_growth", "white_space"]
     )
     sic_codes: Optional[List[str]] = None
+    has_active_charges: bool = False
+    active_charge_count: int = Field(default=0, ge=0)
+    verification_status: str = "VERIFIED"
 
 
 class PlanEconomicsRequest(BaseModel):
@@ -44,25 +51,29 @@ class PlanEconomicsRequest(BaseModel):
 
 class TrackCampaignRequest(BaseModel):
     strategy_id: Optional[str] = None
-    channel_name: str
-    channel_type: str
-    content_format: str
+    channel_name: str = Field(..., min_length=1, max_length=255)
+    channel_type: str = Field(..., min_length=1, max_length=50)
+    content_format: str = Field(..., min_length=1, max_length=50)
     crn: Optional[str] = None
-    budget_gbp: float = 0.0
+    budget_gbp: float = Field(default=0.0, ge=0.0, le=1_000_000.0)
+
+
+class CampaignStatusTransitionRequest(BaseModel):
+    target_status: str = Field(..., description="DRAFT, ACTIVE, PAUSED, COMPLETED, CANCELLED, SUPPRESSED")
 
 
 class IngestOutcomeEventRequest(BaseModel):
-    campaign_id: str
-    event_type: str
+    campaign_id: str = Field(..., min_length=4, max_length=50)
+    event_type: str = Field(..., min_length=3, max_length=50)
     crn: Optional[str] = None
-    funded_amount_gbp: float = 0.0
-    realized_commission_gbp: float = 0.0
+    funded_amount_gbp: float = Field(default=0.0, ge=0.0)
+    realized_commission_gbp: float = Field(default=0.0, ge=0.0)
     event_timestamp: Optional[datetime] = None
     source_reference: Optional[str] = None
 
 
 class IngestOutcomeCsvRequest(BaseModel):
-    csv_content: str
+    csv_content: str = Field(..., min_length=1, max_length=524_288)
 
 
 # --- Endpoints ---
@@ -74,6 +85,7 @@ def list_channel_candidates(
     sector_keyword: Optional[str] = None,
     limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(ALL_AUTHENTICATED_ROLES)),
 ):
     """
     Returns verified B2B marketing channel candidates across UK podcasts,
@@ -114,6 +126,7 @@ def generate_campaign_strategies(
     crn: str,
     payload: Optional[GenerateStrategiesRequest] = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(ALL_AUTHENTICATED_ROLES)),
 ):
     """
     Generates differentiated, evidence-backed commercial finance campaign briefs,
@@ -145,6 +158,9 @@ def generate_campaign_strategies(
         triggered_indicators=req.triggered_indicators,
         indicative_facility_gbp=req.facility_size_gbp,
         available_channels=channel_dicts,
+        has_active_charges=req.has_active_charges,
+        active_charge_count=req.active_charge_count,
+        verification_status=req.verification_status,
     )
 
     return {
@@ -158,6 +174,7 @@ def generate_campaign_strategies(
 @router.post("/campaigns/plan")
 def plan_campaign_economics(
     payload: PlanEconomicsRequest,
+    current_user: User = Depends(require_role(ALL_AUTHENTICATED_ROLES)),
 ) -> CampaignEconomicsModel:
     """
     Calculates full-funnel commercial unit economics across Conservative, Base,
@@ -178,20 +195,26 @@ def plan_campaign_economics(
 def track_campaign(
     payload: TrackCampaignRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(ALL_AUTHENTICATED_ROLES)),
 ):
     """
-    Issues a deterministic campaign tracking identifier formatted as CMP-YYYYMM-XXXX
+    Issues a deterministic campaign tracking identifier formatted as CMP-YYYYMM-XXXXXXXX
     along with standardized UTM parameters.
     """
     service = OutcomeLearningService(db)
-    record = service.issue_campaign_tracking_id(
-        strategy_id=payload.strategy_id,
-        channel_name=payload.channel_name,
-        channel_type=payload.channel_type,
-        content_format=payload.content_format,
-        crn=payload.crn,
-        budget_gbp=payload.budget_gbp,
-    )
+    try:
+        record = service.issue_campaign_tracking_id(
+            strategy_id=payload.strategy_id,
+            channel_name=payload.channel_name,
+            channel_type=payload.channel_type,
+            content_format=payload.content_format,
+            crn=payload.crn,
+            budget_gbp=payload.budget_gbp,
+            owner_user_id=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     return {
         "campaign_id": record.campaign_id,
         "strategy_id": record.strategy_id,
@@ -203,17 +226,52 @@ def track_campaign(
         "utm_medium": record.utm_medium,
         "budget_gbp": record.budget_gbp,
         "status": record.status,
+        "owner_user_id": record.owner_user_id,
         "created_at": record.created_at.isoformat() if record.created_at else None,
     }
+
+
+@router.post("/campaigns/{campaign_id}/status")
+def transition_campaign_status(
+    campaign_id: str,
+    payload: CampaignStatusTransitionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(ALL_AUTHENTICATED_ROLES)),
+):
+    """Transitions a campaign tracking record between permitted lifecycle states."""
+    service = OutcomeLearningService(db)
+    try:
+        record = service.transition_campaign_status(
+            campaign_id=campaign_id,
+            target_status=payload.target_status,
+            actor_user_id=current_user.id,
+            actor_role=current_user.role,
+        )
+        return {
+            "campaign_id": record.campaign_id,
+            "status": record.status,
+            "owner_user_id": record.owner_user_id,
+            "updated_at": record.updated_at.isoformat() if record.updated_at else None,
+        }
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/campaigns")
 def list_tracked_campaigns(
     crn: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(ALL_AUTHENTICATED_ROLES)),
 ):
-    """Lists all active and historical tracked campaigns."""
+    """Lists active and historical tracked campaigns visible to the authenticated user."""
     q = db.query(CampaignTrackingRecord)
+    if (current_user.role or "").upper() not in ("ADMIN", "ANALYST"):
+        q = q.filter(
+            (CampaignTrackingRecord.owner_user_id == current_user.id)
+            | (CampaignTrackingRecord.owner_user_id.is_(None))
+        )
     if crn:
         norm_crn, valid, _ = normalize_uk_crn(crn)
         if valid and norm_crn:
@@ -232,6 +290,7 @@ def list_tracked_campaigns(
                 "utm_campaign": r.utm_campaign,
                 "budget_gbp": r.budget_gbp,
                 "status": r.status,
+                "owner_user_id": r.owner_user_id,
                 "created_at": r.created_at.isoformat() if r.created_at else None,
             }
             for r in records
@@ -243,6 +302,7 @@ def list_tracked_campaigns(
 def record_campaign_outcome(
     payload: IngestOutcomeEventRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(ALL_AUTHENTICATED_ROLES)),
 ):
     """Records an individual funnel outcome event for a campaign."""
     service = OutcomeLearningService(db)
@@ -255,13 +315,20 @@ def record_campaign_outcome(
             realized_commission_gbp=payload.realized_commission_gbp,
             event_timestamp=payload.event_timestamp,
             source_reference=payload.source_reference,
+            actor_user_id=current_user.id,
+            actor_role=current_user.role,
+            enforce_campaign_exists=True,
         )
+        is_new = not getattr(event, "is_duplicate", False)
         return {
-            "status": "RECORDED",
+            "status": "RECORDED" if is_new else "DUPLICATE_IGNORED",
             "event_id": event.id,
             "campaign_id": event.campaign_id,
             "event_type": event.event_type,
+            "is_new": is_new,
         }
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -270,14 +337,24 @@ def record_campaign_outcome(
 def ingest_campaign_outcomes_csv(
     payload: IngestOutcomeCsvRequest,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(ALL_AUTHENTICATED_ROLES)),
 ):
-    """Ingests a batch of campaign outcomes via CSV."""
+    """Ingests a batch of campaign outcomes via CSV with strict ownership and deduplication checks."""
     service = OutcomeLearningService(db)
-    counts = service.ingest_campaign_outcomes_csv(payload.csv_content)
-    return {
-        "status": "COMPLETED",
-        "counts": counts,
-    }
+    try:
+        counts = service.ingest_campaign_outcomes_csv(
+            csv_content=payload.csv_content,
+            actor_user_id=current_user.id,
+            actor_role=current_user.role,
+        )
+        return {
+            "status": "COMPLETED",
+            "counts": counts,
+        }
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/campaigns/metrics")
@@ -285,12 +362,26 @@ def get_campaign_metrics(
     campaign_id: Optional[str] = None,
     as_of: Optional[datetime] = None,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(ALL_AUTHENTICATED_ROLES)),
 ):
     """
     Returns empirical funnel conversion rates, volume, and commission metrics.
     Supports point-in-time snapshotting with as_of to prevent future leakage.
     """
     service = OutcomeLearningService(db)
+    if campaign_id:
+        try:
+            service._verify_campaign_access(
+                campaign_id=campaign_id,
+                actor_user_id=current_user.id,
+                actor_role=current_user.role,
+                require_active=False,
+            )
+        except PermissionError as e:
+            raise HTTPException(status_code=403, detail=str(e))
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+
     metrics = service.compute_empirical_campaign_conversion_rates(
         campaign_id=campaign_id,
         as_of=as_of,

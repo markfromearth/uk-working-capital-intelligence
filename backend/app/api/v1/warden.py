@@ -5,9 +5,11 @@ inspecting trapped cash dossiers, and retrieving primary source evidence.
 """
 
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from backend.app.api.v1.auth import require_role
+from backend.app.models.user import User
 from backend.app.schemas.warden import (
     LendingArchetype,
     PrimarySourceReference,
@@ -17,6 +19,8 @@ from backend.app.schemas.warden import (
 from backend.app.services.pipeline_orchestrator import default_pipeline_orchestrator
 
 router = APIRouter(prefix="/warden", tags=["Invoice Finance Warden (CH-Only)"])
+
+ALL_AUTHENTICATED_ROLES = ["ADMIN", "admin", "ANALYST", "analyst", "BROKER", "broker"]
 
 
 class ScreenCompanyRequest(BaseModel):
@@ -30,6 +34,7 @@ class ScreenCompanyRequest(BaseModel):
 async def screen_company(
     crn: str,
     payload: Optional[ScreenCompanyRequest] = None,
+    current_user: User = Depends(require_role(ALL_AUTHENTICATED_ROLES)),
 ):
     """
     Execute autonomous three-stage screening on a UK Company:
@@ -55,13 +60,18 @@ async def screen_company(
 
 
 @router.get("/prospects", response_model=List[TrappedCashDossier])
-def list_prospects():
+def list_prospects(
+    current_user: User = Depends(require_role(ALL_AUTHENTICATED_ROLES)),
+):
     """List all qualified invoice finance prospects sorted by indicative facility capacity."""
     return default_pipeline_orchestrator.get_prospects()
 
 
 @router.get("/prospects/{crn}/dossier", response_model=TrappedCashDossier)
-def get_prospect_dossier(crn: str):
+def get_prospect_dossier(
+    crn: str,
+    current_user: User = Depends(require_role(ALL_AUTHENTICATED_ROLES)),
+):
     """Retrieve detailed financial extraction dossier and outreach pitch for a qualified lead."""
     dossier = default_pipeline_orchestrator.get_dossier(crn)
     if not dossier:
@@ -73,7 +83,10 @@ def get_prospect_dossier(crn: str):
 
 
 @router.get("/prospects/{crn}/screening", response_model=ScreeningResult)
-def get_prospect_screening(crn: str):
+def get_prospect_screening(
+    crn: str,
+    current_user: User = Depends(require_role(ALL_AUTHENTICATED_ROLES)),
+):
     """Retrieve Stage 1 structured screening result and indicator audit trail for a company."""
     screening = default_pipeline_orchestrator.get_screening(crn)
     if not screening:
@@ -85,7 +98,10 @@ def get_prospect_screening(crn: str):
 
 
 @router.get("/prospects/{crn}/primary-sources", response_model=List[PrimarySourceReference])
-def get_prospect_primary_sources(crn: str):
+def get_prospect_primary_sources(
+    crn: str,
+    current_user: User = Depends(require_role(ALL_AUTHENTICATED_ROLES)),
+):
     """
     Retrieve all retrievable primary sources of evidence (Companies House filings,
     mortgage register entries, statutory document links) for an indicated prospect.
@@ -100,7 +116,9 @@ def get_prospect_primary_sources(crn: str):
 
 
 @router.get("/health")
-def get_warden_health():
+def get_warden_health(
+    current_user: User = Depends(require_role(ALL_AUTHENTICATED_ROLES)),
+):
     """Health and status of the CH-Only Warden pipeline."""
     return {
         "status": "HEALTHY",

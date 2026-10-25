@@ -4,7 +4,10 @@ End-to-End Integration Tests for CH-Only Invoice Finance Warden Pipeline and RES
 
 import pytest
 from fastapi.testclient import TestClient
+from backend.app.core.security import create_access_token, hash_password
+from backend.app.database import SessionLocal, init_db
 from backend.app.main import app
+from backend.app.models.user import User
 from backend.app.schemas.warden import LendingArchetype
 from backend.app.services.pipeline_orchestrator import (
     WardenPipelineOrchestrator,
@@ -16,6 +19,25 @@ from backend.app.services.accounts_fetcher import AccountsFetcher
 
 @pytest.fixture
 def api_client():
+    init_db()
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == "warden_e2e_broker@test.co.uk").first()
+        if not user:
+            user = User(
+                email="warden_e2e_broker@test.co.uk",
+                hashed_password=hash_password("WardenBrokerPass2026!"),
+                full_name="Warden E2E Broker",
+                role="broker",
+                is_active=1,
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        token = create_access_token(subject=user.id, role=user.role)
+    finally:
+        db.close()
+
     # Register hermetic qualified prospect fixture on global orchestrator
     default_pipeline_orchestrator.ch_client.register_fixture(
         "08421099",
@@ -56,7 +78,7 @@ def api_client():
     </body>
     </html>""".encode("utf-8")
     default_pipeline_orchestrator.fetcher.register_fixture("doc123", sample_xhtml, "application/xhtml+xml")
-    return TestClient(app)
+    return TestClient(app, headers={"Authorization": f"Bearer {token}"})
 
 
 @pytest.mark.asyncio

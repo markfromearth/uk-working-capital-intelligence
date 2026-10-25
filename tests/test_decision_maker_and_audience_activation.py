@@ -441,7 +441,7 @@ def test_campaign_performance_measurement():
     assert data["facilities_funded"] == 1
 
     # Verify activation detail endpoint includes metrics
-    detail_resp = client.get(f"/api/v1/audiences/{act.activation_id}")
+    detail_resp = client.get(f"/api/v1/audiences/{act.activation_id}", headers=headers)
     assert detail_resp.status_code == 200
     detail_data = detail_resp.json()
     assert len(detail_data["metrics"]) >= 1

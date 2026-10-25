@@ -6,19 +6,42 @@ campaign tracking codes, CSV outcome batch imports, and HTML dashboard rendering
 
 import pytest
 from fastapi.testclient import TestClient
-from backend.app.database import Base, engine
+from backend.app.core.security import create_access_token, hash_password
+from backend.app.database import Base, engine, SessionLocal, init_db
 from backend.app.main import app
+from backend.app.models.user import User
 
 
 @pytest.fixture(scope="module", autouse=True)
 def setup_db():
-    Base.metadata.create_all(bind=engine)
+    init_db()
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == "marketing_api_broker@test.co.uk").first()
+        if not user:
+            user = User(
+                email="marketing_api_broker@test.co.uk",
+                hashed_password=hash_password("MarketingBrokerTest2026!"),
+                full_name="Marketing API Test Broker",
+                role="broker",
+                is_active=1,
+            )
+            db.add(user)
+            db.commit()
+    finally:
+        db.close()
     yield
 
 
 @pytest.fixture
 def client():
-    return TestClient(app)
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == "marketing_api_broker@test.co.uk").first()
+        token = create_access_token(subject=user.id, role=user.role)
+    finally:
+        db.close()
+    return TestClient(app, headers={"Authorization": f"Bearer {token}"})
 
 
 def test_marketing_channels_api(client: TestClient):

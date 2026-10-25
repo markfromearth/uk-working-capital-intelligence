@@ -44,7 +44,9 @@ class RecordOutcomeRequest(BaseModel):
 # --- Approved Tool Registry Endpoints ---
 
 @router.get("/tools", response_model=List[ToolDefinition])
-def list_approved_tools():
+def list_approved_tools(
+    current_user: User = Depends(require_role(["ADMIN", "admin", "ANALYST", "analyst", "BROKER", "broker"]))
+):
     """Returns the registry of approved investigation tools with transparent fees and rate limits."""
     return approved_tool_registry.list_tools()
 
@@ -110,7 +112,8 @@ def execute_approved_tool(
 @router.get("/investigations/{crn}")
 def get_company_investigation_history(
     crn: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["ADMIN", "admin", "ANALYST", "analyst", "BROKER", "broker"]))
 ):
     """Returns investigation history including skipped queries and economic rationale."""
     norm_crn, valid, err = normalize_uk_crn(crn)
@@ -140,7 +143,8 @@ def get_company_investigation_history(
 @router.get("/assessments/{crn}")
 def get_commercial_opportunity_assessment(
     crn: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["ADMIN", "admin", "ANALYST", "analyst", "BROKER", "broker"]))
 ):
     """Returns the latest commercial opportunity assessment for a company."""
     norm_crn, valid, err = normalize_uk_crn(crn)
@@ -231,7 +235,10 @@ def record_commercial_outcome(
         raise HTTPException(status_code=400, detail=str(e))
 
 @router.get("/outcomes/metrics")
-def get_commercial_conversion_metrics(db: Session = Depends(get_db)):
+def get_commercial_conversion_metrics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["ADMIN", "admin", "ANALYST", "analyst", "BROKER", "broker"]))
+):
     """Returns commercial conversion funnel KPIs and net ROI."""
     service = OutcomeLearningService(db)
     return service.get_commercial_conversion_metrics()

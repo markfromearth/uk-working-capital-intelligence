@@ -40,7 +40,8 @@ class SuppressionRequest(BaseModel):
 @router.get("/company/{crn}/officers")
 def get_company_officers(
     crn: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["ADMIN", "admin", "ANALYST", "analyst", "BROKER", "broker"]))
 ):
     """Returns statutory officers and PSC register for a canonical company."""
     norm_crn, valid, err = normalize_uk_crn(crn)
@@ -71,7 +72,8 @@ def get_company_officers(
 @router.get("/company/{crn}/profiles")
 def get_company_decision_maker_profiles(
     crn: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["ADMIN", "admin", "ANALYST", "analyst", "BROKER", "broker"]))
 ):
     """
     Returns mapped professional profiles with 5-dimension validation gate results.
@@ -202,7 +204,10 @@ def record_suppression(
     return {"status": "success", "id": supp.id, "identifier": supp.identifier_value, "reason": supp.suppression_reason}
 
 @router.get("/suppression")
-def list_suppressions(db: Session = Depends(get_db)):
+def list_suppressions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["ADMIN", "admin", "ANALYST", "analyst", "BROKER", "broker"]))
+):
     """Lists active suppression entries."""
     records = db.query(SuppressionRecord).filter(SuppressionRecord.is_active == True).all()
     return [

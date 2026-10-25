@@ -2,7 +2,7 @@ import pytest
 from starlette.testclient import TestClient
 from backend.app.main import app
 from backend.app.database import SessionLocal, init_db
-from backend.app.models.user import AuditLog
+from backend.app.models.user import AuditLog, AuditCheckpoint
 from backend.app.services.audit import log_audit_event, verify_audit_log_chain
 from backend.app.core.security import hash_password, verify_password
 
@@ -16,7 +16,8 @@ def db_session():
     db.close()
 
 def test_tamper_evident_audit_log_hash_chain(db_session):
-    # Clean audit logs for test isolation
+    # Clean audit logs and checkpoints for test isolation
+    db_session.query(AuditCheckpoint).delete()
     db_session.query(AuditLog).delete()
     db_session.commit()
 

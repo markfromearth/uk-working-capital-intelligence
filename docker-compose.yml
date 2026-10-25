@@ -9,10 +9,12 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - ENVIRONMENT=production
-      - LOG_LEVEL=INFO
-      - DATABASE_URL=postgresql://capital_user:capital_password@postgres:5432/working_capital
-      - DEMO_MODE=true
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set in environment}
+      - AUDIT_CHECKPOINT_SECRET=${AUDIT_CHECKPOINT_SECRET:-}
+      - DATABASE_URL=${DATABASE_URL:?DATABASE_URL must be set in environment}
+      - DEMO_MODE=${DEMO_MODE:-false}
     depends_on:
       postgres:
         condition: service_healthy
@@ -22,15 +24,15 @@ services:
     image: postgres:15-alpine
     container_name: uk_working_capital_postgres
     environment:
-      POSTGRES_USER: capital_user
-      POSTGRES_PASSWORD: capital_password
-      POSTGRES_DB: working_capital
+      POSTGRES_USER: ${POSTGRES_USER:-capital_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in environment}
+      POSTGRES_DB: ${POSTGRES_DB:-working_capital}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U capital_user -d working_capital"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-capital_user} -d ${POSTGRES_DB:-working_capital}"]
       interval: 10s
       timeout: 5s
       retries: 5

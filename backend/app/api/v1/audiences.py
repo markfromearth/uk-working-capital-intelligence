@@ -49,10 +49,16 @@ class RecordPerformanceRequest(BaseModel):
 def list_audience_activations(
     crn: Optional[str] = None,
     status_filter: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["ADMIN", "admin", "ANALYST", "analyst", "BROKER", "broker"]))
 ):
     """Lists audience activations with compliance and execution statuses."""
     query = db.query(AudienceActivation)
+    if (current_user.role or "").upper() not in ("ADMIN", "ANALYST"):
+        query = query.filter(
+            (AudienceActivation.requester_user_id == current_user.id)
+            | (AudienceActivation.requester_user_id.is_(None))
+        )
     if crn:
         norm_crn, valid, _ = normalize_uk_crn(crn)
         if valid and norm_crn:
@@ -74,6 +80,7 @@ def list_audience_activations(
             "compliance_status": a.compliance_approval_status,
             "execution_status": a.execution_status,
             "suppression_cleared": a.suppression_cleared,
+            "requester_user_id": a.requester_user_id,
             "created_at": a.created_at
         } for a in activations
     ]
@@ -81,12 +88,19 @@ def list_audience_activations(
 @router.get("/{activation_id}")
 def get_activation_detail(
     activation_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["ADMIN", "admin", "ANALYST", "analyst", "BROKER", "broker"]))
 ):
     """Returns single activation detail with audit history and performance metrics."""
     a = db.query(AudienceActivation).filter(AudienceActivation.activation_id == activation_id).first()
     if not a:
         raise HTTPException(status_code=404, detail="Activation not found.")
+    if (
+        (current_user.role or "").upper() not in ("ADMIN", "ANALYST")
+        and a.requester_user_id
+        and a.requester_user_id != current_user.id
+    ):
+        raise HTTPException(status_code=403, detail="Access denied: You do not own this audience activation.")
 
     metrics = [
         {
@@ -190,6 +204,16 @@ def execute_activation(
     Executes approved audience activation against destination.
     Fail-closed: blocks execution if compliance unapproved or target suppressed.
     """
+    a = db.query(AudienceActivation).filter(AudienceActivation.activation_id == activation_id).first()
+    if not a:
+        raise HTTPException(status_code=404, detail="Activation not found.")
+    if (
+        (current_user.role or "").upper() not in ("ADMIN", "ANALYST")
+        and a.requester_user_id
+        and a.requester_user_id != current_user.id
+    ):
+        raise HTTPException(status_code=403, detail="Access denied: You do not own this audience activation.")
+
     service = AudienceActivationService(db)
     try:
         res = service.execute_activation(activation_id, actor_user_id=current_user.id)
@@ -205,6 +229,16 @@ def record_campaign_performance(
     current_user: User = Depends(require_role(["ADMIN", "admin", "ANALYST", "analyst", "BROKER", "broker"]))
 ):
     """Records campaign performance and qualified outcomes."""
+    a = db.query(AudienceActivation).filter(AudienceActivation.activation_id == activation_id).first()
+    if not a:
+        raise HTTPException(status_code=404, detail="Activation not found.")
+    if (
+        (current_user.role or "").upper() not in ("ADMIN", "ANALYST")
+        and a.requester_user_id
+        and a.requester_user_id != current_user.id
+    ):
+        raise HTTPException(status_code=403, detail="Access denied: You do not own this audience activation.")
+
     service = AudienceActivationService(db)
     try:
         metric = service.record_campaign_performance(

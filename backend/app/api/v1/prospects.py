@@ -10,6 +10,8 @@ from backend.app.models.signal import NormalizedSignal
 from backend.app.models.score import LiquidityScoreRecord
 from backend.app.models.feature import CompanyFeatureSnapshot
 from backend.app.models.review import BrokerReviewAction
+from backend.app.models.user import User
+from backend.app.api.v1.auth import require_role
 from backend.app.providers.registry import provider_registry
 from backend.app.schemas.review import ProspectListItem
 from backend.app.services.pipeline_orchestrator import default_pipeline_orchestrator
@@ -17,7 +19,10 @@ from backend.app.services.pipeline_orchestrator import default_pipeline_orchestr
 router = APIRouter(prefix="/prospects", tags=["Prospect Intelligence"])
 
 @router.get("/dashboard-metrics")
-def get_dashboard_metrics(db: Session = Depends(get_db)):
+def get_dashboard_metrics(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["ADMIN", "admin", "ANALYST", "analyst", "BROKER", "broker"]))
+):
     """Summary metrics for the commercial broker intelligence dashboard."""
     now = datetime.now(timezone.utc)
     t_30d = now - timedelta(days=30)
@@ -97,7 +102,8 @@ def list_prioritized_prospects(
     sort_by: str = "score",  # 'score', 'recent', 'name'
     skip: int = 0,
     limit: int = 50,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["ADMIN", "admin", "ANALYST", "analyst", "BROKER", "broker"]))
 ):
     """
     Returns prioritized prospects with rich filter criteria, latest signals,

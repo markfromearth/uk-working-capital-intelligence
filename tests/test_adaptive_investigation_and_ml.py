@@ -64,7 +64,8 @@ def get_auth_headers(role="broker", user_id=None):
 # 1. Approved Tool Registry & Circuit Breakers
 
 def test_approved_tool_registry_listing_and_circuit_breakers():
-    response = client.get("/api/v1/adaptive/tools")
+    headers = get_auth_headers(role="broker")
+    response = client.get("/api/v1/adaptive/tools", headers=headers)
     assert response.status_code == 200
     tools = response.json()
     assert len(tools) >= 5
@@ -185,7 +186,7 @@ def test_execute_approved_tool_via_api(monkeypatch):
     assert "workforce" in signal.data_use_restrictions
 
     # Verify investigation history endpoint
-    hist_resp = client.get(f"/api/v1/adaptive/investigations/{crn}")
+    hist_resp = client.get(f"/api/v1/adaptive/investigations/{crn}", headers=headers)
     assert hist_resp.status_code == 200
     hist = hist_resp.json()
     assert len(hist) >= 1
@@ -214,7 +215,8 @@ def test_commercial_opportunity_assessment():
     assert assessment.invoice_finance_fit >= 50.0
 
     # Verify API endpoint
-    resp = client.get(f"/api/v1/adaptive/assessments/{crn}")
+    headers = get_auth_headers(role="broker")
+    resp = client.get(f"/api/v1/adaptive/assessments/{crn}", headers=headers)
     assert resp.status_code == 200
     data = resp.json()
     assert data["crn"] == crn
@@ -258,7 +260,7 @@ def test_funnel_outcome_recording_and_kpis():
         assert res.json()["status"] == "success"
 
     # Verify metrics endpoint
-    metrics_resp = client.get("/api/v1/adaptive/outcomes/metrics")
+    metrics_resp = client.get("/api/v1/adaptive/outcomes/metrics", headers=headers)
     assert metrics_resp.status_code == 200
     metrics = metrics_resp.json()
     assert metrics["total_outcomes_recorded"] >= 3

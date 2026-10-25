@@ -1,10 +1,12 @@
+from collections import defaultdict, deque
+from contextlib import asynccontextmanager
+import os
 import time
 import uuid
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, FileResponse
-import os
 
 from backend.app.config import settings
 from backend.app.core.logging import logger, set_correlation_id
@@ -25,27 +27,43 @@ from backend.app.api.v1.audiences import router as audiences_router
 from backend.app.api.v1.warden import router as warden_router
 from backend.app.api.v1.marketing import router as marketing_router
 
-from contextlib import asynccontextmanager
+
+# Sliding-window rate limiter state (per client IP)
+_rate_limit_windows: dict = defaultdict(deque)
+
+
+def reset_rate_limiter() -> None:
+    _rate_limit_windows.clear()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    settings.validate_production_security()
     logger.info("Initializing Working-Capital Platform database...")
     init_db()
-    
-    # Initialize default admin/broker user if not present
+
     db = SessionLocal()
     try:
-        admin = db.query(User).filter(User.email == "broker@commercialfinance.co.uk").first()
-        if not admin:
-            admin = User(
-                email="broker@commercialfinance.co.uk",
-                hashed_password=hash_password("FintechBroker2026!"),
-                full_name="Commercial Prospecting Broker",
-                role="broker"
+        # Explicit, opt-in bootstrap account provisioning (never hardcoded credentials)
+        if settings.BOOTSTRAP_ADMIN_EMAIL and settings.BOOTSTRAP_ADMIN_PASSWORD:
+            if len(settings.BOOTSTRAP_ADMIN_PASSWORD) < 12:
+                raise RuntimeError("BOOTSTRAP_ADMIN_PASSWORD must be at least 12 characters long.")
+            existing_admin = (
+                db.query(User)
+                .filter(User.email == settings.BOOTSTRAP_ADMIN_EMAIL)
+                .first()
             )
-            db.add(admin)
-            db.commit()
-            logger.info("Created default broker user (broker@commercialfinance.co.uk)")
+            if not existing_admin:
+                admin = User(
+                    email=settings.BOOTSTRAP_ADMIN_EMAIL,
+                    hashed_password=hash_password(settings.BOOTSTRAP_ADMIN_PASSWORD),
+                    full_name="Bootstrap Platform Administrator",
+                    role=settings.BOOTSTRAP_ADMIN_ROLE,
+                    is_active=1,
+                )
+                db.add(admin)
+                db.commit()
+                logger.info(f"Provisioned explicit bootstrap user ({settings.BOOTSTRAP_ADMIN_EMAIL})")
 
         # Ensure genuine reference companies are initialized and screened if database is empty
         from backend.app.models.company import CompanyRegistry
@@ -61,33 +79,77 @@ async def lifespan(app: FastAPI):
         db.close()
     yield
 
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version="1.0.0",
     description="UK Working-Capital Intelligence & Prospect Scoring Platform API",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    lifespan=lifespan
+    docs_url="/docs" if settings.ENVIRONMENT != "production" else None,
+    redoc_url="/redoc" if settings.ENVIRONMENT != "production" else None,
+    lifespan=lifespan,
 )
 
-# CORS
+# CORS: never combine wildcard origins with allow_credentials=True
+_cors_origins = [o for o in settings.BACKEND_CORS_ORIGINS if o != "*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_cors_origins,
+    allow_credentials=bool(_cors_origins),
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Correlation-ID", "X-Creditsafe-Signature", "X-Creditsafe-Timestamp"],
 )
 
-# Correlation ID Middleware
+
+@app.exception_handler(Exception)
+async def safe_unhandled_exception_handler(request: Request, exc: Exception):
+    """Prevents internal stack traces, SQL strings, or secret values from leaking in 500 responses."""
+    logger.error(f"Unhandled server exception on {request.method} {request.url.path}: {type(exc).__name__}")
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "Internal server error. Please reference X-Correlation-ID for support."},
+    )
+
+
+# Correlation ID, Request Size Guard, Rate Limiter & Security Headers Middleware
 @app.middleware("http")
 async def correlation_id_middleware(request: Request, call_next):
     cid = request.headers.get("X-Correlation-ID", str(uuid.uuid4()))
     set_correlation_id(cid)
     start_time = time.time()
-    
+
+    # 1. Request body size limit guard
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > settings.MAX_REQUEST_BODY_BYTES:
+                return JSONResponse(
+                    status_code=413,
+                    content={"detail": f"Request payload exceeds maximum limit of {settings.MAX_REQUEST_BODY_BYTES} bytes."},
+                    headers={"X-Correlation-ID": cid},
+                )
+        except ValueError:
+            return JSONResponse(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                content={"detail": "Malformed Content-Length header."},
+                headers={"X-Correlation-ID": cid},
+            )
+
+    # 2. Sliding-window rate limit check
+    client_host = request.client.host if request.client else "local"
+    now = time.time()
+    window = _rate_limit_windows[client_host]
+    while window and (now - window[0]) > 60.0:
+        window.popleft()
+    if len(window) >= settings.RATE_LIMIT_PER_MINUTE:
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={"detail": "Rate limit exceeded. Please retry after 60 seconds."},
+            headers={"X-Correlation-ID": cid, "Retry-After": "60"},
+        )
+    window.append(now)
+
     response = await call_next(request)
-    
+
     process_time = (time.time() - start_time) * 1000.0
     response.headers["X-Correlation-ID"] = cid
     response.headers["X-Process-Time-Ms"] = f"{process_time:.2f}"

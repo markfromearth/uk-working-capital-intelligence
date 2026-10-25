@@ -10,7 +10,8 @@ from backend.app.models.signal import NormalizedSignal
 from backend.app.models.score import LiquidityScoreRecord, ScoreContributionRecord
 from backend.app.models.feature import CompanyFeatureSnapshot
 from backend.app.models.review import BrokerReviewAction
-from backend.app.models.user import AuditLog
+from backend.app.models.user import AuditLog, User
+from backend.app.api.v1.auth import require_role
 from backend.app.schemas.company import CompanyOut, MatchReviewDecision
 from backend.app.services.resolution import EntityResolutionService
 from backend.app.services.feature_store import FeatureStoreService
@@ -26,7 +27,8 @@ async def list_companies(
     limit: int = 50,
     status: Optional[str] = None,
     search: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["ADMIN", "admin", "ANALYST", "analyst", "BROKER", "broker"]))
 ):
     query = db.query(CompanyRegistry).filter(CompanyRegistry.is_synthetic == 0)
     if status:
@@ -86,7 +88,11 @@ async def list_companies(
 
 @router.get("/{crn}")
 @router.get("/{crn}/profile")
-async def get_company_intelligence_profile(crn: str, db: Session = Depends(get_db)):
+async def get_company_intelligence_profile(
+    crn: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["ADMIN", "admin", "ANALYST", "analyst", "BROKER", "broker"]))
+):
     norm_crn, valid, err = normalize_uk_crn(crn)
     if not valid or not norm_crn:
         raise HTTPException(status_code=400, detail=f"Invalid UK Company Registration Number: {err}")
@@ -262,7 +268,11 @@ async def get_company_intelligence_profile(crn: str, db: Session = Depends(get_d
     }
 
 @router.post("/{crn}/recompute-score")
-def recompute_company_score(crn: str, db: Session = Depends(get_db)):
+def recompute_company_score(
+    crn: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["ADMIN", "admin", "ANALYST", "analyst", "BROKER", "broker"]))
+):
     norm_crn, valid, err = normalize_uk_crn(crn)
     if not valid or not norm_crn:
         raise HTTPException(status_code=400, detail=f"Invalid UK CRN: {err}")

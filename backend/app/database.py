@@ -66,4 +66,30 @@ def init_db():
                     conn.exec_driver_sql("ALTER TABLE normalized_signals ADD COLUMN data_use_restrictions VARCHAR(255) DEFAULT 'b2b_commercial_finance_only'")
                 if "provenance_details" not in sig_cols:
                     conn.exec_driver_sql("ALTER TABLE normalized_signals ADD COLUMN provenance_details TEXT")
+
+            # Check campaign_tracking_records for ownership and updated_at
+            ctr_cursor = conn.exec_driver_sql("PRAGMA table_info(campaign_tracking_records)")
+            ctr_cols = [row[1] for row in ctr_cursor.fetchall()]
+            if ctr_cols:
+                if "owner_user_id" not in ctr_cols:
+                    conn.exec_driver_sql("ALTER TABLE campaign_tracking_records ADD COLUMN owner_user_id VARCHAR(36)")
+                if "updated_at" not in ctr_cols:
+                    conn.exec_driver_sql("ALTER TABLE campaign_tracking_records ADD COLUMN updated_at DATETIME")
+
+            # Check campaign_outcome_events for deduplication fingerprint and actor
+            coe_cursor = conn.exec_driver_sql("PRAGMA table_info(campaign_outcome_events)")
+            coe_cols = [row[1] for row in coe_cursor.fetchall()]
+            if coe_cols:
+                if "event_fingerprint" not in coe_cols:
+                    conn.exec_driver_sql("ALTER TABLE campaign_outcome_events ADD COLUMN event_fingerprint VARCHAR(64)")
+                if "recorded_by_user_id" not in coe_cols:
+                    conn.exec_driver_sql("ALTER TABLE campaign_outcome_events ADD COLUMN recorded_by_user_id VARCHAR(36)")
+
+            # Check audience_activations for requester_user_id
+            aa_cursor = conn.exec_driver_sql("PRAGMA table_info(audience_activations)")
+            aa_cols = [row[1] for row in aa_cursor.fetchall()]
+            if aa_cols:
+                if "requester_user_id" not in aa_cols:
+                    conn.exec_driver_sql("ALTER TABLE audience_activations ADD COLUMN requester_user_id VARCHAR(36)")
+
             conn.commit()

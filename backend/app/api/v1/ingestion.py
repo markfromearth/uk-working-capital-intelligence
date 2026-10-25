@@ -25,14 +25,21 @@ async def creditsafe_webhook_receiver(
 ):
     """
     Authenticated Webhook Receiver for Creditsafe Commercial Risk Events.
+    Fails closed when CREDITSAFE_WEBHOOK_SECRET is unconfigured.
     Verifies HMAC signature, enforces replay protection, deduplicates,
     and ingests signals idempotently.
     """
+    if not settings.CREDITSAFE_WEBHOOK_SECRET:
+        logger.warning("Rejected Creditsafe webhook: CREDITSAFE_WEBHOOK_SECRET is not configured")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Webhook authentication secret is not configured; unsigned webhooks are rejected"
+        )
+
     body_bytes = await request.body()
     adapter = provider_registry.creditsafe
 
-    # Verify signature if secret configured
-    if settings.CREDITSAFE_WEBHOOK_SECRET and not adapter.verify_webhook(body_bytes, x_creditsafe_signature, timestamp_header=x_creditsafe_timestamp):
+    if not adapter.verify_webhook(body_bytes, x_creditsafe_signature, timestamp_header=x_creditsafe_timestamp):
         logger.warning("Rejected Creditsafe webhook: Invalid HMAC signature or timestamp replay")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -74,6 +81,7 @@ async def creditsafe_webhook_receiver(
 @router.post("/sync/companies-house-stream")
 def trigger_companies_house_stream_sync(
     limit: int = 20,
+    current_user: User = Depends(require_role(["ADMIN", "admin", "ANALYST", "analyst"])),
     db: Session = Depends(get_db)
 ):
     """

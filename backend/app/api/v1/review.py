@@ -23,7 +23,8 @@ router = APIRouter(prefix="/reviews", tags=["Broker Review & Resolution Workflow
 def record_prospect_review_action(
     crn: str,
     action_in: ReviewActionCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["ADMIN", "admin", "ANALYST", "analyst", "BROKER", "broker"]))
 ):
     norm_crn, valid, err = normalize_uk_crn(crn)
     if not valid or not norm_crn:
@@ -72,6 +73,9 @@ def record_prospect_review_action(
         action=f"broker_review_{action_in.review_status}",
         resource_type="prospect",
         resource_id=norm_crn,
+        user_id=current_user.id,
+        user_email=current_user.email,
+        user_role=current_user.role,
         details={
             "status": action_in.review_status,
             "broker": action_in.assigned_broker_name,
@@ -82,7 +86,11 @@ def record_prospect_review_action(
     return review_action
 
 @router.get("/prospects/{crn}/history", response_model=List[ReviewActionOut])
-def get_review_history_for_company(crn: str, db: Session = Depends(get_db)):
+def get_review_history_for_company(
+    crn: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["ADMIN", "admin", "ANALYST", "analyst", "BROKER", "broker"]))
+):
     norm_crn, valid, err = normalize_uk_crn(crn)
     if not valid or not norm_crn:
         raise HTTPException(status_code=400, detail="Invalid CRN")
@@ -91,14 +99,19 @@ def get_review_history_for_company(crn: str, db: Session = Depends(get_db)):
 # --- Entity Match Review Queue Endpoints ---
 
 @router.get("/matches", response_model=List[CompanyMatchReviewOut])
-def list_pending_entity_matches(status: str = "pending", db: Session = Depends(get_db)):
+def list_pending_entity_matches(
+    status: str = "pending",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["ADMIN", "admin", "ANALYST", "analyst", "BROKER", "broker"]))
+):
     return db.query(CompanyMatchReview).filter(CompanyMatchReview.status == status).order_by(CompanyMatchReview.created_at.desc()).all()
 
 @router.post("/matches/{match_id}/decision", response_model=CompanyMatchReviewOut)
 def decide_entity_match(
     match_id: int,
     decision: MatchReviewDecision,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(["ADMIN", "admin", "ANALYST", "analyst"]))
 ):
     review = db.query(CompanyMatchReview).filter(CompanyMatchReview.id == match_id).first()
     if not review:
@@ -115,6 +128,9 @@ def decide_entity_match(
         action=f"entity_match_{decision.status}",
         resource_type="company_match",
         resource_id=str(match_id),
+        user_id=current_user.id,
+        user_email=current_user.email,
+        user_role=current_user.role,
         details={"source_identifier": review.source_identifier, "candidate_crn": review.candidate_crn}
     )
     return review

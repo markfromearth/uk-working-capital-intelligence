@@ -48,9 +48,11 @@ def health_check(db: Session = Depends(get_db)):
     }
 
 @router.get("/providers")
-def get_providers_status():
+def get_providers_status(
+    current_user: User = Depends(require_role(["ADMIN", "admin", "ANALYST", "analyst", "BROKER", "broker"]))
+):
     """
-    Returns explicit capability and credential health for all 4 provider adapters.
+    Returns explicit capability and credential health for all provider adapters.
     Distinguishes live from simulated vs unconfigured integrations.
     """
     return [p.model_dump() for p in provider_registry.get_health_summary()]

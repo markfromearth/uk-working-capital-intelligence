@@ -64,7 +64,9 @@ class CampaignTrackingRecord(Base):
     utm_medium = Column(String(100), nullable=False)
     budget_gbp = Column(Float, default=0.0)
     status = Column(String(50), default="ACTIVE")
+    owner_user_id = Column(String(36), nullable=True, index=True)
     created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
 
 class CampaignOutcomeEvent(Base):
@@ -78,5 +80,8 @@ class CampaignOutcomeEvent(Base):
     realized_commission_gbp = Column(Float, default=0.0)
     event_timestamp = Column(DateTime, nullable=False, default=utcnow)
     source_reference = Column(Text, nullable=True)
+    event_fingerprint = Column(String(64), nullable=True, unique=True, index=True)
+    recorded_by_user_id = Column(String(36), nullable=True, index=True)
     created_at = Column(DateTime, default=utcnow)
+
 

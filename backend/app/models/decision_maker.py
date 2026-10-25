@@ -176,6 +176,7 @@ class AudienceActivation(Base):
 
     # Distress targeting protection (Must be False to execute)
     asserts_financial_distress = Column(Boolean, default=False)
+    requester_user_id = Column(String(36), nullable=True, index=True)
 
     created_at = Column(DateTime, default=utcnow)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
