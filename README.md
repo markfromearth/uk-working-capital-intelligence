@@ -19,7 +19,18 @@ A secure, observable, production-grade B2B intelligence platform designed for co
   3. Workforce expansion & payroll burn pressure (max 20 pts)
   4. Cross-signal corroboration & trend persistence (max 20 pts)
 - **Evidence-Grounded AI Explanations**: Bounded schema-constrained structured output contract referencing verified stored signal IDs. Prompt injection hardened with zero-hallucination deterministic fallbacks.
-- **Restrained B2B Fintech UI**: Responsive data-dense dashboard, prioritized prospect table, multi-parameter filtering, interactive company profiles, and human review/dispute workflow.
+- **Autonomous Multi-Agent Architecture (Agents A through J)**: Decoupled, typed asynchronous agents communicating through versioned Pydantic envelopes with budget tracking and an independent verification gate:
+  - **Agent A (`SIGNAL_DETECTION`)**: Ingests statutory Companies House filings, OCDS contract awards from Contracts Finder, and insolvency petitions from The Gazette.
+  - **Agent B (`ENTITY_RESOLUTION`)**: Canonical entity matching and cross-source record unmerging.
+  - **Agent C (`ADAPTIVE_INVESTIGATION`)**: Free-first Value-of-Information (EVOI) search over official public databases.
+  - **Agent D (`FINANCE_OPPORTUNITY`)**: Quant accounts extraction, FRS 102/105 balance sheet reconciliation, and 80% borrowing base facility sizing.
+  - **Agent E (`MARKETING_RESEARCH`)**: B2B marketing channel discovery across UK podcasts, trade associations, and industry conferences.
+  - **Agent F (`AUDIENCE_STRATEGY`)**: Formulates differentiated commercial campaign briefs, creative angles, and low-cost validation test plans.
+  - **Agent G (`CAMPAIGN_ECONOMICS`)**: Full-funnel commercial unit economics modeling across Conservative, Base, and Optimistic scenarios.
+  - **Agent H (`CAMPAIGN_MEASUREMENT`)**: Issues deterministic tracking IDs (`CMP-YYYYMM-XXXX`), ingests outcomes via CSV, and updates Bayesian EVOI priors.
+  - **Agent I (`COMPLIANCE_RISK`)**: Enforces PECR Regulation 23 Corporate Subscriber rules, suppression checks, and SSRF defenses.
+  - **Agent J (`INDEPENDENT_VERIFICATION`)**: Cryptographic audit inspection verifying that zero ungrounded or fabricated claims are emitted.
+- **Restrained B2B Fintech UI**: Responsive data-dense dashboard, prioritized prospect table, multi-parameter filtering, interactive company profiles, trapped cash dossiers, and unified marketing intelligence workspace.
 
 ---
 
@@ -56,28 +67,30 @@ API documentation is available at **`http://localhost:8000/docs`**.
 
 ## 3. Running Automated Tests
 
-The platform includes **92 comprehensive automated tests** spanning unit, integration, entity resolution, point-in-time correctness, machine learning lifecycle, and controlled failure-detection tests:
+The platform includes **164 comprehensive automated tests** (100% passing) spanning unit, integration, entity resolution, point-in-time correctness, multi-agent orchestration, marketing intelligence, and controlled failure-detection tests:
 
 ```bash
 source .venv/bin/activate
-PYTHONPATH=. pytest -v tests/
+pytest -v
 ```
 
-### Verification Coverage
-1. `tests/test_crn_normalizer.py`: Numeric padding, Scottish `SC`, Northern Irish `NI`, LLP `OC`, and error handling.
-2. `tests/test_companies_house_adapter.py`: MR04 charge parsing, full vs partial scope detection, stream checkpoint persistence, and resume cursor recovery.
-3. `tests/test_credit_and_workforce_adapters.py`: Creditsafe webhook HMAC verification, replay protection, strict DBT vs DSO separation, and headcount growth/acceleration calculations.
-4. `tests/test_entity_resolution.py`: Exact CRN matching, high-confidence fuzzy matching with postcode boost, and manual review routing for ambiguous candidates (score 0.65–0.89).
-5. `tests/test_feature_store_point_in_time.py`: Historical point-in-time isolation proving no future signal leakage.
-6. `tests/test_scoring_engine.py`: Multi-source corroboration, single-source caps (capped at 49.0), and contradictory evidence dampening.
-7. `tests/test_llm_explainer.py`: Strict schema validation and rejection of hallucinated signal IDs.
-8. `tests/test_api_and_review_workflow.py`: End-to-end API verification, dashboard metrics, profile retrieval, and broker review logging.
-9. `tests/test_controlled_failures.py`: Demonstrates that critical tests actively detect invalid conditions.
-10. `tests/test_audit_trail_tamper_evidence.py`: Cryptographic hash chain verification and tampering detection.
-11. `tests/test_adaptive_investigation_and_ml.py`: EVOI evaluation, tool registry, budget caps, and commercial opportunity assessments.
-12. `tests/test_decision_maker_and_audience_activation.py`: Decision-maker discovery, multi-signal identity resolution, and audience activation.
-13. `tests/test_ml_dataset_and_leakage.py`: Canonical feature extraction, point-in-time snapshot dataset construction, strict right-censoring, and target leakage prevention.
-14. `tests/test_ml_proxy_pipeline.py`: Statutory proxy-label backfill (`new_charge_12m`), rate pacing, and distinction from broker conversion.
+### Complete Verification Suite (164 Tests)
+1. `tests/test_procurement_and_gazette.py`: Contracts Finder OCDS awards, The Gazette statutory notices, and provisional score knockout logic.
+2. `tests/test_agent_orchestration.py`: End-to-end 10-agent orchestration (Agents A through J), budget enforcement, and rejection of ungrounded claims.
+3. `tests/test_marketing_discovery.py`: Free B2B channel discovery, iTunes Podcast search, trade association mapping, and strictly unobserved audience metrics.
+4. `tests/test_campaign_strategy.py`: Differentiated B2B campaign briefs, creative angles, PECR guardrails, and validation test plans.
+5. `tests/test_campaign_economics.py`: Full-funnel unit economics modeling across Conservative, Base, and Optimistic bounds, break-even response rates, and assumption isolation.
+6. `tests/test_campaign_learning.py`: Deterministic tracking codes (`CMP-YYYYMM-XXXX`), CSV batch ingestion, point-in-time zero leakage, and Bayesian EVOI updates.
+7. `tests/test_marketing_api.py`: Marketing REST API endpoints and dashboard UI integration.
+8. `tests/test_marketing_compliance_adversarial.py`: PECR Corporate Subscriber verification (Reg 22 vs Reg 23), SSRF protections, and cryptographic audit tampering detection.
+9. `tests/test_crn_normalizer.py`: Numeric padding, Scottish `SC`, Northern Irish `NI`, LLP `OC`, and error handling.
+10. `tests/test_companies_house_adapter.py`: MR04 charge parsing, full vs partial scope detection, stream checkpoint persistence, and resume cursor recovery.
+11. `tests/test_credit_and_workforce_adapters.py`: Creditsafe webhook HMAC verification, replay protection, strict DBT vs DSO separation, and headcount growth/acceleration calculations.
+12. `tests/test_entity_resolution.py`: Exact CRN matching, high-confidence fuzzy matching with postcode boost, and manual review routing.
+13. `tests/test_feature_store_point_in_time.py`: Historical point-in-time isolation proving no future signal leakage.
+14. `tests/test_scoring_engine.py`: Multi-source corroboration, single-source caps, and contradictory evidence dampening.
+15. `tests/test_audit_and_security.py` & `test_audit_advanced_tampering.py`: Cryptographic hash chain verification and tampering detection.
+16. `tests/test_adaptive_investigation_and_ml.py`: EVOI evaluation, tool registry, and zero-cost public tool preference.
 15. `tests/test_ml_training_and_evaluation.py`: Walk-forward validation, disjoint company clustering, candidate model training, rules baseline head-to-head metrics, refusal guards, and model card serialization.
 16. `tests/test_ml_shadow_logging_and_promotion.py`: Shadow prediction persistence in `model_predictions`, cluster bootstrap confidence interval evaluation, `/ml/status`, and manual admin promotion workflow.
 17. `tests/test_ml_evoi_learning.py`: Canonical missingness pattern extraction, prior fallbacks, Bayesian-smoothed empirical EVOI learning, and investigation run outcome logging.
