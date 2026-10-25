@@ -300,3 +300,65 @@ class IdentityResolutionService:
             "is_erased": True,
             "profiles_redacted": len(profiles)
         }
+
+    # =========================================================================
+    # PECR CORPORATE SUBSCRIBER VALIDATION (Phase 10 & 11)
+    # =========================================================================
+
+    @classmethod
+    def validate_corporate_subscriber_status(
+        cls,
+        company_type: Optional[str] = None,
+        crn: Optional[str] = None,
+        has_prior_opt_in_consent: bool = False,
+    ) -> Tuple[bool, str, str, str]:
+        """
+        Validates whether target is a UK Corporate Subscriber under PECR 2003 Regulation 23.
+        Corporate bodies (Ltd, PLC, LLP, Scottish LP) permit B2B marketing via Legitimate Interests.
+        Individual subscribers (sole traders, unincorporated partnerships) strictly require prior opt-in consent (Reg 22).
+
+        Returns: (is_permissible, status_code, legal_basis, rationale)
+        """
+        corporate_types = {
+            "ltd",
+            "limited",
+            "private-limited-company",
+            "private-limited-guarant-nfs-limited-exemption",
+            "plc",
+            "public-limited-company",
+            "llp",
+            "limited-liability-partnership",
+            "scottish-partnership",
+            "scottish-limited-partnership",
+            "registered-society-non-jurisdictional",
+            "community-interest-company",
+            "cic",
+            "royal-charter",
+        }
+
+        clean_type = (company_type or "ltd").strip().lower().replace("_", "-")
+
+        if clean_type in corporate_types:
+            return (
+                True,
+                "CORPORATE_SUBSCRIBER_EXEMPT",
+                "PECR Regulation 23 / GDPR Art 6(1)(f) Legitimate Interests",
+                f"Entity '{clean_type}' is a verified corporate body; direct B2B marketing permissible with opt-out.",
+            )
+
+        # Non-corporate subscriber (sole trader or unincorporated entity)
+        if has_prior_opt_in_consent:
+            return (
+                True,
+                "OPT_IN_CONSENT_VERIFIED",
+                "PECR Regulation 22 / GDPR Art 6(1)(a) Explicit Consent",
+                f"Non-corporate entity '{clean_type}' has verifiable prior opt-in consent on record.",
+            )
+
+        return (
+            False,
+            "NON_CORPORATE_REQUIRES_OPT_IN",
+            "PECR Regulation 22 Violation Risk",
+            f"Entity '{clean_type}' is classified as an individual subscriber. Direct electronic marketing prohibited without recorded opt-in consent.",
+        )
+

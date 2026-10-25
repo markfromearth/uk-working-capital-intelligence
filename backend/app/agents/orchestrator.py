@@ -24,6 +24,7 @@ from backend.app.agents.marketing_research import MarketingResearchAgent
 from backend.app.agents.audience_strategy import AudienceStrategyAgent
 from backend.app.agents.campaign_economics import CampaignEconomicsAgent
 from backend.app.agents.campaign_measurement import CampaignMeasurementAgent
+from backend.app.agents.compliance_risk import ComplianceRiskAgent
 from backend.app.agents.independent_verification import IndependentVerificationAgent
 from backend.app.core.crn_normalizer import normalize_uk_crn
 from backend.app.core.logging import logger
@@ -41,6 +42,7 @@ class MultiAgentOrchestrator:
         self.strategy_agent = AudienceStrategyAgent()
         self.economics_agent = CampaignEconomicsAgent()
         self.measurement_agent = CampaignMeasurementAgent()
+        self.compliance_agent = ComplianceRiskAgent()
         self.verification_agent = IndependentVerificationAgent()
 
     async def run_investigation_pipeline(
@@ -213,7 +215,29 @@ class MultiAgentOrchestrator:
         prior_results.append(res_h)
         trace.task_traces.append(res_h)
 
-        # --- STEP 9: Independent Verification (Agent J) ---
+        # --- STEP 9: Compliance & Adversarial Risk (Agent I) ---
+        req_i = AgentTaskRequest(
+            correlation_id=cid,
+            target_role=AgentRole.COMPLIANCE_RISK,
+            crn=norm_crn,
+            budget_limit_gbp=remaining_budget,
+            input_payload={
+                "company_type": "ltd",
+                "urls_to_verify": [
+                    c.get("website_uri")
+                    for c in res_e.output_payload.get("channel_candidates", [])
+                    if c.get("website_uri")
+                ],
+            },
+            provenance_chain=[r.task_id for r in prior_results],
+        )
+        res_i = await self.compliance_agent.execute(req_i)
+        accumulated_cost += res_i.cost_incurred_gbp
+        remaining_budget = max(0.0, remaining_budget - res_i.cost_incurred_gbp)
+        prior_results.append(res_i)
+        trace.task_traces.append(res_i)
+
+        # --- STEP 10: Independent Verification (Agent J) ---
         req_j = AgentTaskRequest(
             correlation_id=cid,
             target_role=AgentRole.INDEPENDENT_VERIFICATION,
