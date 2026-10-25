@@ -24,10 +24,32 @@ def db_session():
 
 
 @pytest.mark.asyncio
-async def test_podcast_discovery_enforces_unobserved_metric_rule():
+async def test_podcast_discovery_enforces_unobserved_metric_rule(monkeypatch):
+    import httpx
+    from backend.app.config import settings
+    from backend.app.core.ssrf_protection import SafeHttpClient
+
+    async def _mock_itunes_get(self, url, params=None, headers=None, transport=None):
+        return httpx.Response(
+            200,
+            json={
+                "resultCount": 1,
+                "results": [
+                    {
+                        "collectionName": "UK Commercial Fleet & Freight Weekly",
+                        "artistName": "Freight Broadcast Network",
+                        "collectionViewUrl": "https://podcasts.apple.com/gb/podcast/uk-commercial-fleet/id123456",
+                        "feedUrl": "https://logistics.org.uk/podcast/feed.xml",
+                        "trackCount": 142,
+                    }
+                ],
+            },
+        )
+
+    monkeypatch.setattr(SafeHttpClient, "get", _mock_itunes_get)
     service = MarketingChannelDiscoveryService()
     podcasts = await service.search_podcasts("commercial fleet")
-    assert len(podcasts) >= 1
+    assert len(podcasts) == 1
 
     for p in podcasts:
         assert p["channel_type"] == MarketingChannelType.PODCAST.value
@@ -36,7 +58,24 @@ async def test_podcast_discovery_enforces_unobserved_metric_rule():
         # Strict requirement: Never fabricate listener counts or ratings
         assert p["reach_metric_text"] == "UNOBSERVED"
         assert p["is_reach_verified"] is False
+        assert p["provenance_mode"] == "LIVE"
         assert p["estimated_cost_tier"] in ("FREE_EDITORIAL", "UNKNOWN")
+
+    # Verify timeout handling: DEMO_MODE=False returns [] (never fabricates positive/simulated channel)
+    async def _mock_timeout_get(self, url, params=None, headers=None, transport=None):
+        raise httpx.ReadTimeout("Simulated iTunes timeout")
+
+    monkeypatch.setattr(SafeHttpClient, "get", _mock_timeout_get)
+    monkeypatch.setattr(settings, "DEMO_MODE", False)
+    assert await service.search_podcasts("commercial fleet") == []
+
+    # In DEMO_MODE=True, fallback is explicitly labeled SIMULATED and UNOBSERVED
+    monkeypatch.setattr(settings, "DEMO_MODE", True)
+    sim_podcasts = await service.search_podcasts("commercial fleet")
+    assert len(sim_podcasts) == 1
+    assert sim_podcasts[0]["provenance_mode"] == "SIMULATED"
+    assert sim_podcasts[0]["verification_status"] == "simulated"
+    assert sim_podcasts[0]["reach_metric_text"] == "UNOBSERVED"
 
 
 def test_trade_associations_mapped_by_sic_prefix():

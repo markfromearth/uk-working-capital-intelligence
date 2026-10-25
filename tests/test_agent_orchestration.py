@@ -21,8 +21,14 @@ from backend.app.agents.adaptive_investigation import AdaptiveInvestigationAgent
 from backend.app.agents.opportunity_assessment import FinanceOpportunityAgent
 from backend.app.agents.independent_verification import IndependentVerificationAgent
 from backend.app.agents.orchestrator import MultiAgentOrchestrator, default_agent_orchestrator
+from backend.app.database import init_db
 from backend.app.providers.contracts_finder import ContractsFinderAdapter
 from backend.app.providers.registry import provider_registry
+
+
+@pytest.fixture(scope="module", autouse=True)
+def ensure_agent_db_initialized():
+    init_db()
 
 
 @pytest.mark.asyncio

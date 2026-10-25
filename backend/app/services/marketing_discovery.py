@@ -138,7 +138,7 @@ UK_TRADE_CONFERENCES_MAP: Dict[str, List[Dict[str, Any]]] = {
         {
             "name": "Smart Manufacturing & Engineering Week",
             "role": "Plant Director / Managing Director",
-            "url": "https://www.mandewex.co.uk",
+            "url": "https://www.mandeweek.co.uk",
             "opp_type": "EXHIBITION",
             "cost_tier": "HIGH",
             "desc": "National celebration of UK industrial engineering, capex, and manufacturing at the NEC.",

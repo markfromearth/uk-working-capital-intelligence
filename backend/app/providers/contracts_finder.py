@@ -29,6 +29,8 @@ class ContractsFinderAdapter(IProviderAdapter):
 
     def __init__(self):
         self._test_fixtures: Dict[str, List[Dict[str, Any]]] = {}
+        self.last_fetch_status: str = "IDLE"
+        self.last_error: Optional[str] = None
 
     @property
     def provider_name(self) -> str:
@@ -41,6 +43,14 @@ class ContractsFinderAdapter(IProviderAdapter):
         self._test_fixtures[key] = notices
 
     def get_health_status(self) -> ProviderStatus:
+        if self.last_fetch_status == "TIMED_OUT":
+            return ProviderStatus(
+                provider_name=self.provider_name,
+                status=AdapterHealthStatus.DEGRADED,
+                endpoint=CONTRACTS_FINDER_BASE,
+                rate_limit_remaining=None,
+                message=f"Contracts Finder request timed out (TIMED_OUT): {self.last_error}",
+            )
         return ProviderStatus(
             provider_name=self.provider_name,
             status=AdapterHealthStatus.LIVE,
@@ -55,6 +65,7 @@ class ContractsFinderAdapter(IProviderAdapter):
         limit: int = 10,
     ) -> List[Dict[str, Any]]:
         """Query official Contracts Finder public OCDS search API via SSRF-hardened SafeHttpClient."""
+        import httpx
         params: Dict[str, Any] = {"stages": "award", "size": limit}
         if supplier_name:
             params["keyword"] = supplier_name
@@ -62,12 +73,21 @@ class ContractsFinderAdapter(IProviderAdapter):
         try:
             client = SafeHttpClient(timeout_seconds=10.0)
             resp = await client.get_async(CONTRACTS_FINDER_BASE, params=params)
+            self.last_fetch_status = "OK"
+            self.last_error = None
             if resp.status_code == 200:
                 data = resp.json()
                 return data.get("releases", []) or data.get("results", []) or []
             logger.warning(f"Contracts Finder query returned status {resp.status_code}")
             return []
+        except (httpx.TimeoutException, TimeoutError) as e:
+            self.last_fetch_status = "TIMED_OUT"
+            self.last_error = str(e)
+            logger.warning(f"Contracts Finder query timed out: {e}")
+            return []
         except Exception as e:
+            self.last_fetch_status = "ERROR"
+            self.last_error = str(e)
             logger.warning(f"Contracts Finder connection failed: {e}")
             return []
 

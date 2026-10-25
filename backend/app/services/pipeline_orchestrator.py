@@ -67,7 +67,18 @@ class WardenPipelineOrchestrator:
             }
 
         # --- STAGE 1: Structured Screening & Provisional Scoring ---
+        if hasattr(self.ch_client, "last_fetch_status"):
+            self.ch_client.last_fetch_status = "IDLE"
+            self.ch_client.last_error = None
+
         profile = await self.ch_client.fetch_profile(norm_crn)
+        if getattr(self.ch_client, "last_fetch_status", None) == "TIMED_OUT":
+            return {
+                "status": "SOURCE_TIMEOUT",
+                "message": f"Companies House profile lookup timed out for {norm_crn}: {getattr(self.ch_client, 'last_error', 'timeout')}",
+                "screening": None,
+                "dossier": None,
+            }
         if not profile:
             return {
                 "status": "NOT_FOUND",
@@ -79,6 +90,13 @@ class WardenPipelineOrchestrator:
         charges = await self.ch_client.fetch_charges(norm_crn)
         filings = await self.ch_client.fetch_filing_history(norm_crn)
         officers = await self.ch_client.fetch_officers(norm_crn)
+        if getattr(self.ch_client, "last_fetch_status", None) == "TIMED_OUT":
+            return {
+                "status": "SOURCE_TIMEOUT",
+                "message": f"Companies House statutory register fetch timed out for {norm_crn}; refusing to score incomplete register as clean.",
+                "screening": None,
+                "dossier": None,
+            }
 
         # Collect public procurement & gazette statutory signals
         from backend.app.providers.registry import provider_registry

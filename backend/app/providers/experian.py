@@ -20,12 +20,23 @@ class ExperianAdapter(IProviderAdapter):
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = settings.EXPERIAN_API_KEY if api_key is None else api_key
         self._is_live = bool(self.api_key and self.api_key.strip() and self.api_key != "mock_key")
+        self.last_fetch_status: str = "IDLE"
+        self.last_error: Optional[str] = None
 
     @property
     def provider_name(self) -> str:
         return "experian"
 
     def get_health_status(self) -> ProviderStatus:
+        if self.last_fetch_status == "TIMED_OUT":
+            return ProviderStatus(
+                provider_name=self.provider_name,
+                status=AdapterHealthStatus.DEGRADED,
+                endpoint=EXPERIAN_BASE_URL,
+                rate_limit_remaining=None,
+                last_event_timestamp=datetime.now(timezone.utc),
+                message=f"Source request timed out (TIMED_OUT): {self.last_error}",
+            )
         if self._is_live:
             return ProviderStatus(
                 provider_name=self.provider_name,
@@ -61,11 +72,20 @@ class ExperianAdapter(IProviderAdapter):
         headers = {"Authorization": f"Bearer {self.api_key}", "Accept": "application/json"}
         try:
             resp = httpx.get(url, headers=headers, timeout=10.0)
+            self.last_fetch_status = "OK"
+            self.last_error = None
             if resp.status_code == 200:
                 data = resp.json()
                 return self._parse_experian_payload(crn, data)
             return []
+        except (httpx.TimeoutException, TimeoutError) as e:
+            self.last_fetch_status = "TIMED_OUT"
+            self.last_error = str(e)
+            logger.error(f"Experian live API timeout for {crn}: {e}")
+            return []
         except Exception as e:
+            self.last_fetch_status = "ERROR"
+            self.last_error = str(e)
             logger.error(f"Experian live API failure for {crn}: {e}")
             return []
 

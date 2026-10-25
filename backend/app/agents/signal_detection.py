@@ -21,13 +21,22 @@ class SignalDetectionAgent(BaseAgent):
         crn = request.crn
         signals: List[Dict[str, Any]] = []
         evidence_refs: List[Dict[str, Any]] = []
+        degraded_sources: List[Dict[str, Any]] = []
         total_cost = 0.00  # Free public data sources
 
         # 1. Companies House Public Register
         ch_adapter = provider_registry.get_adapter("companies_house")
         if ch_adapter:
             try:
+                if hasattr(ch_adapter, "last_fetch_status"):
+                    ch_adapter.last_fetch_status = "IDLE"
                 ch_sigs = ch_adapter.fetch_company_signals(crn)
+                if getattr(ch_adapter, "last_fetch_status", None) == "TIMED_OUT":
+                    degraded_sources.append({
+                        "provider": "companies_house",
+                        "status": "TIMED_OUT",
+                        "error": getattr(ch_adapter, "last_error", "timeout"),
+                    })
                 signals.extend(ch_sigs)
                 for s in ch_sigs:
                     if s.get("evidence_reference"):
@@ -36,14 +45,22 @@ class SignalDetectionAgent(BaseAgent):
                             "uri": s["evidence_reference"],
                             "ref": s.get("original_event_ref"),
                         })
-            except Exception:
-                pass
+            except Exception as e:
+                degraded_sources.append({"provider": "companies_house", "status": "ERROR", "error": str(e)})
 
         # 2. Contracts Finder OCDS Awards
         cf_adapter = provider_registry.get_adapter("contracts_finder")
         if cf_adapter:
             try:
+                if hasattr(cf_adapter, "last_fetch_status"):
+                    cf_adapter.last_fetch_status = "IDLE"
                 cf_sigs = cf_adapter.fetch_company_signals(crn)
+                if getattr(cf_adapter, "last_fetch_status", None) == "TIMED_OUT":
+                    degraded_sources.append({
+                        "provider": "contracts_finder",
+                        "status": "TIMED_OUT",
+                        "error": getattr(cf_adapter, "last_error", "timeout"),
+                    })
                 signals.extend(cf_sigs)
                 for s in cf_sigs:
                     if s.get("evidence_reference"):
@@ -52,14 +69,22 @@ class SignalDetectionAgent(BaseAgent):
                             "uri": s["evidence_reference"],
                             "ref": s.get("original_event_ref"),
                         })
-            except Exception:
-                pass
+            except Exception as e:
+                degraded_sources.append({"provider": "contracts_finder", "status": "ERROR", "error": str(e)})
 
         # 3. The Gazette Statutory Insolvency Notices
         gz_adapter = provider_registry.get_adapter("the_gazette")
         if gz_adapter:
             try:
+                if hasattr(gz_adapter, "last_fetch_status"):
+                    gz_adapter.last_fetch_status = "IDLE"
                 gz_sigs = gz_adapter.fetch_company_signals(crn)
+                if getattr(gz_adapter, "last_fetch_status", None) == "TIMED_OUT":
+                    degraded_sources.append({
+                        "provider": "the_gazette",
+                        "status": "TIMED_OUT",
+                        "error": getattr(gz_adapter, "last_error", "timeout"),
+                    })
                 signals.extend(gz_sigs)
                 for s in gz_sigs:
                     if s.get("evidence_reference"):
@@ -68,12 +93,14 @@ class SignalDetectionAgent(BaseAgent):
                             "uri": s["evidence_reference"],
                             "ref": s.get("original_event_ref"),
                         })
-            except Exception:
-                pass
+            except Exception as e:
+                degraded_sources.append({"provider": "the_gazette", "status": "ERROR", "error": str(e)})
 
         output_payload = {
             "signals_detected_count": len(signals),
             "signals": signals,
+            "degraded_sources": degraded_sources,
+            "has_timed_out_sources": any(d.get("status") == "TIMED_OUT" for d in degraded_sources),
             "has_growth_signals": any(s.get("signal_type") == "contract_award_growth" for s in signals),
             "has_distress_signals": any(s.get("signal_type") == "gazette_insolvency_notice" for s in signals),
         }

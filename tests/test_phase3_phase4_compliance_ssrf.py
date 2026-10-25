@@ -287,3 +287,89 @@ async def test_compliance_risk_agent_resolves_dns_and_blocks_unknown_company_typ
     res_dns_ssrf = await agent.execute(req_dns_ssrf)
     assert res_dns_ssrf.output_payload["is_compliance_cleared"] is False
     assert any("Private network IP" in v for v in res_dns_ssrf.output_payload["violations"])
+
+
+@pytest.mark.asyncio
+async def test_pinned_ssrf_network_backend_constrains_actual_connected_ip_and_blocks_connect_time_rebinding():
+    """
+    Proves that PinnedSSRFNetworkBackend:
+    1. Resolves the hostname at connect_tcp time and passes the literal validated IP (not the hostname)
+       to the underlying socket connect_tcp, pinning the actual connected destination IP.
+    2. Blocks connect-time DNS rebinding (when pre-flight checks #1 and #2 return a safe public IP,
+       and the 3rd DNS lookup inside connect_tcp returns 127.0.0.1 or ::ffff:169.254.169.254).
+    3. Verifies post-connect socket peername and immediately closes the stream if the connected peer IP is blocked.
+    """
+    from httpcore._backends.base import AsyncNetworkBackend, AsyncNetworkStream
+    from backend.app.core.ssrf_protection import PinnedSSRFNetworkBackend
+
+    class _FakeSocket:
+        def __init__(self, peer_ip: str):
+            self._peer_ip = peer_ip
+
+        def getpeername(self):
+            return (self._peer_ip, 443)
+
+    class _FakeStream(AsyncNetworkStream):
+        def __init__(self, peer_ip: str):
+            self.peer_ip = peer_ip
+            self.closed = False
+
+        async def read(self, max_bytes: int, timeout=None) -> bytes:
+            return b""
+
+        async def write(self, buffer: bytes, timeout=None) -> None:
+            pass
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+        async def start_tls(self, ssl_context, server_hostname=None, timeout=None):
+            return self
+
+        def get_extra_info(self, info: str):
+            if info == "socket":
+                return _FakeSocket(self.peer_ip)
+            return None
+
+    class _FakeInnerBackend(AsyncNetworkBackend):
+        def __init__(self, peer_ip_override=None):
+            self.connected_hosts = []
+            self.peer_ip_override = peer_ip_override
+            self.last_stream = None
+
+        async def connect_tcp(self, host: str, port: int, timeout=None, local_address=None, socket_options=None):
+            self.connected_hosts.append((host, port))
+            self.last_stream = _FakeStream(self.peer_ip_override or host)
+            return self.last_stream
+
+    # 1. Safe domain -> underlying connect_tcp receives literal IP "93.184.216.34", NOT "safe.example.com"
+    inner_ok = _FakeInnerBackend()
+    pinned_ok = PinnedSSRFNetworkBackend(
+        dns_resolver=lambda host: ["93.184.216.34"],
+        inner_backend=inner_ok,
+    )
+    stream = await pinned_ok.connect_tcp("safe.example.com", 443)
+    assert inner_ok.connected_hosts == [("93.184.216.34", 443)]
+    assert pinned_ok.last_connected_ip == "93.184.216.34"
+    assert stream.closed is False
+
+    # 2. Connect-time DNS rebinding to IPv4-mapped IPv6 metadata ::ffff:169.254.169.254 -> Blocked before inner connect_tcp!
+    inner_rebind = _FakeInnerBackend()
+    pinned_rebind = PinnedSSRFNetworkBackend(
+        dns_resolver=lambda host: ["::ffff:169.254.169.254"],
+        inner_backend=inner_rebind,
+    )
+    with pytest.raises(ValueError, match="IPv4-mapped IPv6"):
+        await pinned_rebind.connect_tcp("rebind.example.com", 443)
+    assert inner_rebind.connected_hosts == []
+
+    # 3. Post-connect peername verification: if OS socket connected to 169.254.169.254, stream is closed and ValueError raised
+    inner_bad_peer = _FakeInnerBackend(peer_ip_override="169.254.169.254")
+    pinned_bad_peer = PinnedSSRFNetworkBackend(
+        dns_resolver=lambda host: ["93.184.216.34"],
+        inner_backend=inner_bad_peer,
+    )
+    with pytest.raises(ValueError, match="post-connect"):
+        await pinned_bad_peer.connect_tcp("safe.example.com", 443)
+    assert inner_bad_peer.last_stream is not None
+    assert inner_bad_peer.last_stream.closed is True

@@ -23,12 +23,23 @@ class CompaniesHouseAdapter(IProviderAdapter, IStreamingAdapter):
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = settings.COMPANIES_HOUSE_API_KEY if api_key is None else api_key
         self._is_live = bool(self.api_key and self.api_key.strip() and self.api_key != "mock_key")
+        self.last_fetch_status: str = "IDLE"
+        self.last_error: Optional[str] = None
 
     @property
     def provider_name(self) -> str:
         return "companies_house"
 
     def get_health_status(self) -> ProviderStatus:
+        if self.last_fetch_status == "TIMED_OUT":
+            return ProviderStatus(
+                provider_name=self.provider_name,
+                status=AdapterHealthStatus.DEGRADED,
+                endpoint=COMPANIES_HOUSE_API_URL,
+                rate_limit_remaining=None,
+                last_event_timestamp=datetime.now(timezone.utc),
+                message=f"Source request timed out (TIMED_OUT): {self.last_error}",
+            )
         if self._is_live:
             return ProviderStatus(
                 provider_name=self.provider_name,
@@ -145,11 +156,20 @@ class CompaniesHouseAdapter(IProviderAdapter, IStreamingAdapter):
         url = f"{COMPANIES_HOUSE_API_URL}/company/{crn}/charges"
         try:
             response = httpx.get(url, auth=(self.api_key, ""), timeout=10.0)
+            self.last_fetch_status = "OK"
+            self.last_error = None
             if response.status_code == 200:
                 data = response.json()
                 return data.get("items", [])
             return []
+        except (httpx.TimeoutException, TimeoutError) as e:
+            self.last_fetch_status = "TIMED_OUT"
+            self.last_error = str(e)
+            logger.error(f"Timed out fetching live charges for {crn}: {e}")
+            return []
         except Exception as e:
+            self.last_fetch_status = "ERROR"
+            self.last_error = str(e)
             logger.error(f"Failed to fetch live charges for {crn}: {e}")
             return []
 
@@ -157,11 +177,20 @@ class CompaniesHouseAdapter(IProviderAdapter, IStreamingAdapter):
         url = f"{COMPANIES_HOUSE_API_URL}/company/{crn}/officers"
         try:
             response = httpx.get(url, auth=(self.api_key, ""), timeout=10.0)
+            self.last_fetch_status = "OK"
+            self.last_error = None
             if response.status_code == 200:
                 data = response.json()
                 return data.get("items", [])
             return []
+        except (httpx.TimeoutException, TimeoutError) as e:
+            self.last_fetch_status = "TIMED_OUT"
+            self.last_error = str(e)
+            logger.error(f"Timed out fetching live officers for {crn}: {e}")
+            return []
         except Exception as e:
+            self.last_fetch_status = "ERROR"
+            self.last_error = str(e)
             logger.error(f"Failed to fetch live officers for {crn}: {e}")
             return []
 
@@ -169,11 +198,20 @@ class CompaniesHouseAdapter(IProviderAdapter, IStreamingAdapter):
         url = f"{COMPANIES_HOUSE_API_URL}/company/{crn}/persons-with-significant-control"
         try:
             response = httpx.get(url, auth=(self.api_key, ""), timeout=10.0)
+            self.last_fetch_status = "OK"
+            self.last_error = None
             if response.status_code == 200:
                 data = response.json()
                 return data.get("items", [])
             return []
+        except (httpx.TimeoutException, TimeoutError) as e:
+            self.last_fetch_status = "TIMED_OUT"
+            self.last_error = str(e)
+            logger.error(f"Timed out fetching live PSC for {crn}: {e}")
+            return []
         except Exception as e:
+            self.last_fetch_status = "ERROR"
+            self.last_error = str(e)
             logger.error(f"Failed to fetch live PSC for {crn}: {e}")
             return []
 

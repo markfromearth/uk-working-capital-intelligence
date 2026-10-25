@@ -29,6 +29,8 @@ class GazetteAdapter(IProviderAdapter):
 
     def __init__(self):
         self._test_fixtures: Dict[str, List[Dict[str, Any]]] = {}
+        self.last_fetch_status: str = "IDLE"
+        self.last_error: Optional[str] = None
 
     @property
     def provider_name(self) -> str:
@@ -41,6 +43,14 @@ class GazetteAdapter(IProviderAdapter):
         self._test_fixtures[key] = notices
 
     def get_health_status(self) -> ProviderStatus:
+        if self.last_fetch_status == "TIMED_OUT":
+            return ProviderStatus(
+                provider_name=self.provider_name,
+                status=AdapterHealthStatus.DEGRADED,
+                endpoint=THE_GAZETTE_NOTICES_BASE,
+                rate_limit_remaining=None,
+                message=f"The Gazette request timed out (TIMED_OUT): {self.last_error}",
+            )
         return ProviderStatus(
             provider_name=self.provider_name,
             status=AdapterHealthStatus.LIVE,
@@ -51,6 +61,7 @@ class GazetteAdapter(IProviderAdapter):
 
     async def search_insolvency_live(self, company_name_or_crn: str) -> List[Dict[str, Any]]:
         """Live search of The Gazette for corporate insolvency notices via SSRF-hardened SafeHttpClient."""
+        import httpx
         url = f"{THE_GAZETTE_NOTICES_BASE}/data.json"
         params = {
             "text": company_name_or_crn,
@@ -60,12 +71,21 @@ class GazetteAdapter(IProviderAdapter):
         try:
             client = SafeHttpClient(timeout_seconds=10.0)
             resp = await client.get_async(url, params=params, headers={"Accept": "application/json"})
+            self.last_fetch_status = "OK"
+            self.last_error = None
             if resp.status_code == 200:
                 data = resp.json()
                 return data.get("entry", []) or []
             logger.warning(f"The Gazette returned status {resp.status_code}")
             return []
+        except (httpx.TimeoutException, TimeoutError) as e:
+            self.last_fetch_status = "TIMED_OUT"
+            self.last_error = str(e)
+            logger.warning(f"The Gazette live lookup timed out: {e}")
+            return []
         except Exception as e:
+            self.last_fetch_status = "ERROR"
+            self.last_error = str(e)
             logger.warning(f"The Gazette live lookup failed: {e}")
             return []
 

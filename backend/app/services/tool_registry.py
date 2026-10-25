@@ -277,11 +277,18 @@ class ApprovedToolRegistry:
 
         try:
             adapter = provider_registry.get_adapter(tool.provider_name)
+            if adapter is not None and hasattr(adapter, "last_fetch_status"):
+                adapter.last_fetch_status = "IDLE"
+                adapter.last_error = None
             signals_found = 0
             summary = ""
 
             if tool_name == "companies_house_charges_refresh":
                 charges = adapter.fetch_company_charges(norm_crn)
+                if getattr(adapter, "last_fetch_status", None) == "TIMED_OUT":
+                    raise TimeoutError(
+                        f"Source timeout in '{tool.provider_name}' during '{tool_name}': {getattr(adapter, 'last_error', 'timeout')}"
+                    )
                 signals = adapter._parse_charge_into_signals(norm_crn, charges[0]) if charges else []
                 for s in signals:
                     s["data_use_restrictions"] = tool.data_use_policy
@@ -290,11 +297,19 @@ class ApprovedToolRegistry:
                 summary = f"Refreshed {len(charges)} charges; created {signals_found} normalized signals."
 
             elif tool_name == "companies_house_profile_lookup":
-                profile = adapter.fetch_company_profile(norm_crn)
+                profile = adapter.fetch_company_profile(norm_crn) or {}
+                if getattr(adapter, "last_fetch_status", None) == "TIMED_OUT":
+                    raise TimeoutError(
+                        f"Source timeout in '{tool.provider_name}' during '{tool_name}': {getattr(adapter, 'last_error', 'timeout')}"
+                    )
                 summary = f"Verified profile: {profile.get('company_name', 'Unknown')}, Status: {profile.get('company_status', 'Unknown')}."
 
             elif tool_name in ("contracts_finder_awards_lookup", "the_gazette_insolvency_check"):
                 signals = adapter.fetch_company_signals(norm_crn)
+                if getattr(adapter, "last_fetch_status", None) == "TIMED_OUT":
+                    raise TimeoutError(
+                        f"Source timeout in '{tool.provider_name}' during '{tool_name}': {getattr(adapter, 'last_error', 'timeout')}"
+                    )
                 for s in signals:
                     s["data_use_restrictions"] = tool.data_use_policy
                     s["provenance_details"] = f"investigation_tool:{tool_name}:{actor_user_id}"
@@ -304,6 +319,10 @@ class ApprovedToolRegistry:
 
             elif tool_name in ("creditsafe_deep_financials", "experian_delinquency_trace", "workforce_hiring_velocity"):
                 signals = adapter.fetch_company_signals(norm_crn)
+                if getattr(adapter, "last_fetch_status", None) == "TIMED_OUT":
+                    raise TimeoutError(
+                        f"Source timeout in '{tool.provider_name}' during '{tool_name}': {getattr(adapter, 'last_error', 'timeout')}"
+                    )
                 for s in signals:
                     s["data_use_restrictions"] = tool.data_use_policy
                     s["provenance_details"] = f"investigation_tool:{tool_name}:{actor_user_id}"

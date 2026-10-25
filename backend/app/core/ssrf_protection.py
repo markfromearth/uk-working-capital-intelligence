@@ -8,8 +8,11 @@ timeouts, and response size/content-type limits.
 import ipaddress
 import re
 import socket
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Callable, Dict, Iterable, List, Optional, Set, Tuple, Union
 from urllib.parse import urljoin, urlparse
+import httpcore
+from httpcore._backends.auto import AutoBackend
+from httpcore._backends.base import AsyncNetworkBackend, AsyncNetworkStream
 import httpx
 
 # Prohibited hostnames (Cloud metadata and internal services)
@@ -222,12 +225,141 @@ def validate_safe_url(
     return True, "URL is safe"
 
 
+class PinnedSSRFNetworkBackend(AsyncNetworkBackend):
+    """
+    Transport-level SSRF enforcement and connected-IP pinning backend for httpcore/httpx.
+    Guarantees that:
+    1. Immediately at TCP socket connect time (`connect_tcp`), the target host is resolved
+       and every candidate IP (IPv4/IPv6/mapped-IPv6) is verified via `is_ip_blocked`.
+    2. The underlying TCP socket connects directly to the literal validated IP address
+       (`pinned_ip`) rather than passing the hostname back to OS DNS resolution, eliminating
+       DNS rebinding TOCTOU between validation and `connect()`.
+    3. TLS SNI and X.509 hostname verification remain intact because `httpcore` passes the
+       original request origin hostname to `stream.start_tls(server_hostname=...)`.
+    4. Post-connect socket peername inspection verifies the connected peer IP before any
+       bytes are transmitted.
+    """
+
+    def __init__(
+        self,
+        dns_resolver: Optional[Callable[[str], List[str]]] = None,
+        inner_backend: Optional[AsyncNetworkBackend] = None,
+    ):
+        self.dns_resolver = dns_resolver
+        self._inner: AsyncNetworkBackend = inner_backend if inner_backend is not None else AutoBackend()
+        self.last_connected_ip: Optional[str] = None
+
+    def resolve_and_pin_ip(self, host: str, port: int) -> str:
+        host_clean = (host or "").strip().strip("[]").lower().rstrip(".")
+        if not host_clean:
+            raise ValueError("Outbound HTTP blocked by SSRF boundary at socket connect: empty host")
+        if host_clean in BLOCKED_HOSTNAMES:
+            raise ValueError(f"Outbound HTTP blocked by SSRF boundary at socket connect: prohibited host '{host}'")
+        if any(host_clean.endswith(tld) for tld in BLOCKED_TLD_SUFFIXES):
+            raise ValueError(f"Outbound HTTP blocked by SSRF boundary at socket connect: prohibited internal TLD '{host}'")
+
+        parsed_ip = _normalize_and_parse_ip(host_clean)
+        if parsed_ip is not None:
+            ip_str = str(parsed_ip)
+            blocked, reason = is_ip_blocked(ip_str)
+            if blocked:
+                raise ValueError(f"Outbound HTTP blocked by SSRF boundary at socket connect: {reason}")
+            return ip_str
+
+        if _NUMERIC_OR_HEX_HOST_RE.match(host_clean):
+            raise ValueError(f"Outbound HTTP blocked by SSRF boundary at socket connect: obfuscated IP host '{host}'")
+
+        try:
+            if self.dns_resolver is not None:
+                resolved_ips = list(dict.fromkeys(self.dns_resolver(host_clean)))
+            else:
+                addr_info = socket.getaddrinfo(host_clean, port, socket.AF_UNSPEC, socket.SOCK_STREAM)
+                resolved_ips = []
+                for item in addr_info:
+                    sockaddr = item[4]
+                    if sockaddr and sockaddr[0] not in resolved_ips:
+                        resolved_ips.append(sockaddr[0])
+        except socket.gaierror as e:
+            raise ValueError(
+                f"Outbound HTTP blocked by SSRF boundary at socket connect: Fail-closed DNS resolution failure for '{host}': {e}"
+            ) from e
+        except Exception as e:
+            raise ValueError(
+                f"Outbound HTTP blocked by SSRF boundary at socket connect: DNS verification error for '{host}': {e}"
+            ) from e
+
+        if not resolved_ips:
+            raise ValueError(
+                f"Outbound HTTP blocked by SSRF boundary at socket connect: DNS resolution returned no addresses for '{host}'"
+            )
+
+        for ip_str in resolved_ips:
+            blocked, reason = is_ip_blocked(ip_str)
+            if blocked:
+                raise ValueError(
+                    f"Outbound HTTP blocked by SSRF boundary at socket connect: Host '{host}' resolved to prohibited address: {reason}"
+                )
+
+        return resolved_ips[0]
+
+    async def connect_tcp(
+        self,
+        host: str,
+        port: int,
+        timeout: Optional[float] = None,
+        local_address: Optional[str] = None,
+        socket_options: Optional[Iterable[Any]] = None,
+    ) -> AsyncNetworkStream:
+        pinned_ip = self.resolve_and_pin_ip(host, port)
+        self.last_connected_ip = pinned_ip
+
+        stream = await self._inner.connect_tcp(
+            pinned_ip,
+            port,
+            timeout=timeout,
+            local_address=local_address,
+            socket_options=socket_options,
+        )
+
+        # Post-connect peername verification on the actual connected socket
+        raw_sock = stream.get_extra_info("socket")
+        if raw_sock is not None:
+            try:
+                peer = raw_sock.getpeername()
+                if isinstance(peer, tuple) and len(peer) >= 1:
+                    peer_ip = str(peer[0])
+                    blocked, reason = is_ip_blocked(peer_ip)
+                    if blocked:
+                        await stream.aclose()
+                        raise ValueError(
+                            f"Outbound HTTP blocked by SSRF boundary post-connect: connected peer '{peer_ip}' rejected ({reason})"
+                        )
+            except ValueError:
+                raise
+            except Exception:
+                pass
+
+        return stream
+
+    async def connect_unix_socket(
+        self,
+        path: str,
+        timeout: Optional[float] = None,
+        socket_options: Optional[Iterable[Any]] = None,
+    ) -> AsyncNetworkStream:
+        raise ValueError("Outbound Unix domain socket connections are prohibited by SSRF boundary")
+
+    async def sleep(self, seconds: float) -> None:
+        await self._inner.sleep(seconds)
+
+
 class SafeHttpClient:
     """
     Centralized outbound HTTP security boundary.
     Enforces:
     - URL & DNS validation before every request and every redirect hop (max 3 redirects).
-    - Re-resolution check at connection time to defend against DNS rebinding.
+    - Transport-level connected destination IP pinning via `PinnedSSRFNetworkBackend`
+      to eliminate DNS rebinding TOCTOU between validation and socket connect.
     - Disabled environment proxy trust (`trust_env=False`).
     - Strict connect/read timeouts and maximum response payload size limits.
     - Optional content-type allowlist enforcement.
@@ -248,6 +380,7 @@ class SafeHttpClient:
         self.allow_http = allow_http
         self.allowed_content_types = allowed_content_types
         self.dns_resolver = dns_resolver
+        self.network_backend = PinnedSSRFNetworkBackend(dns_resolver=dns_resolver)
 
     def verify_target(self, url: str) -> str:
         is_safe, reason = validate_safe_url(
@@ -260,6 +393,11 @@ class SafeHttpClient:
             raise ValueError(f"Outbound HTTP blocked by SSRF boundary: {reason}")
         return url
 
+    def _build_pinned_transport(self) -> httpx.AsyncHTTPTransport:
+        transport = httpx.AsyncHTTPTransport(trust_env=False)
+        transport._pool._network_backend = self.network_backend
+        return transport
+
     async def get(
         self,
         url: str,
@@ -271,11 +409,12 @@ class SafeHttpClient:
         hops = 0
 
         timeout = httpx.Timeout(self.timeout_seconds, connect=min(5.0, self.timeout_seconds))
+        active_transport = transport if transport is not None else self._build_pinned_transport()
         async with httpx.AsyncClient(
             timeout=timeout,
             follow_redirects=False,
             trust_env=False,
-            transport=transport,
+            transport=active_transport,
         ) as client:
             while True:
                 # 1. Pre-flight SSRF + DNS check

@@ -56,6 +56,8 @@ class CompaniesHouseCHClient:
         self._is_live = bool(self.api_key and self.api_key.strip() and self.api_key != "mock_key")
         self.rate_limiter = AsyncTokenBucket()
         self._test_fixtures: Dict[str, Dict[str, Any]] = {}
+        self.last_fetch_status: str = "IDLE"
+        self.last_error: Optional[str] = None
 
     def register_fixture(self, crn: str, data: Dict[str, Any]):
         """Register explicit test fixture data for a CRN during isolated testing."""
@@ -84,13 +86,22 @@ class CompaniesHouseCHClient:
         try:
             async with httpx.AsyncClient(timeout=HTTP_TIMEOUT) as client:
                 resp = await client.get(url, auth=auth)
+                self.last_fetch_status = "OK"
+                self.last_error = None
                 if resp.status_code == 200:
                     return resp.json()
                 if resp.status_code == 404:
                     return None
                 logger.error(f"CH profile lookup failed for {norm_crn}: status {resp.status_code}")
                 return None
-        except (httpx.TimeoutException, httpx.RequestError) as e:
+        except (httpx.TimeoutException, TimeoutError) as e:
+            self.last_fetch_status = "TIMED_OUT"
+            self.last_error = str(e)
+            logger.warning(f"Timeout querying CH profile for {norm_crn}: {e}")
+            return None
+        except httpx.RequestError as e:
+            self.last_fetch_status = "ERROR"
+            self.last_error = str(e)
             logger.warning(f"Network error querying CH profile for {norm_crn}: {e}")
             return None
 
@@ -117,7 +128,14 @@ class CompaniesHouseCHClient:
                     data = resp.json()
                     return data.get("items", [])
                 return []
-        except (httpx.TimeoutException, httpx.RequestError) as e:
+        except (httpx.TimeoutException, TimeoutError) as e:
+            self.last_fetch_status = "TIMED_OUT"
+            self.last_error = str(e)
+            logger.warning(f"Timeout querying CH charges for {norm_crn}: {e}")
+            return []
+        except httpx.RequestError as e:
+            self.last_fetch_status = "ERROR"
+            self.last_error = str(e)
             logger.warning(f"Network error querying CH charges for {norm_crn}: {e}")
             return []
 
@@ -145,7 +163,14 @@ class CompaniesHouseCHClient:
                     data = resp.json()
                     return data.get("items", [])
                 return []
-        except (httpx.TimeoutException, httpx.RequestError) as e:
+        except (httpx.TimeoutException, TimeoutError) as e:
+            self.last_fetch_status = "TIMED_OUT"
+            self.last_error = str(e)
+            logger.warning(f"Timeout querying CH filing history for {norm_crn}: {e}")
+            return []
+        except httpx.RequestError as e:
+            self.last_fetch_status = "ERROR"
+            self.last_error = str(e)
             logger.warning(f"Network error querying CH filing history for {norm_crn}: {e}")
             return []
 

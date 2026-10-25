@@ -21,12 +21,23 @@ class WorkforceAdapter(IProviderAdapter):
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = settings.PROXYCURL_API_KEY if api_key is None else api_key
         self._is_live = bool(self.api_key and self.api_key.strip() and self.api_key != "mock_key")
+        self.last_fetch_status: str = "IDLE"
+        self.last_error: Optional[str] = None
 
     @property
     def provider_name(self) -> str:
         return "workforce_intelligence"
 
     def get_health_status(self) -> ProviderStatus:
+        if self.last_fetch_status == "TIMED_OUT":
+            return ProviderStatus(
+                provider_name=self.provider_name,
+                status=AdapterHealthStatus.DEGRADED,
+                endpoint=PROXYCURL_BASE_URL,
+                rate_limit_remaining=None,
+                last_event_timestamp=datetime.now(timezone.utc),
+                message=f"Source request timed out (TIMED_OUT): {self.last_error}",
+            )
         if self._is_live:
             return ProviderStatus(
                 provider_name=self.provider_name,
@@ -73,6 +84,8 @@ class WorkforceAdapter(IProviderAdapter):
         try:
             # Query by company domain or name if available
             resp = httpx.get(url, headers=headers, params={"enrich_profiles": "skip"}, timeout=12.0)
+            self.last_fetch_status = "OK"
+            self.last_error = None
             if resp.status_code == 200:
                 data = resp.json()
                 # Extract aggregate headcount (no personal employee records)
@@ -80,7 +93,14 @@ class WorkforceAdapter(IProviderAdapter):
                 if current_hc:
                     return [{"date": datetime.now(timezone.utc).isoformat(), "headcount": int(current_hc)}]
             return []
+        except (httpx.TimeoutException, TimeoutError) as e:
+            self.last_fetch_status = "TIMED_OUT"
+            self.last_error = str(e)
+            logger.error(f"Workforce API timeout for {crn}: {e}")
+            return []
         except Exception as e:
+            self.last_fetch_status = "ERROR"
+            self.last_error = str(e)
             logger.error(f"Workforce API error: {e}")
             return []
 
