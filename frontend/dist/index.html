@@ -65,6 +65,10 @@
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
           Reports
         </a>
+        <a href="javascript:void(0)" onclick="showMarketingView()" id="nav-btn-marketing" class="flex items-center gap-3 px-3 py-2 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"></path></svg>
+          Marketing Intel
+        </a>
       </nav>
     </div>
 
@@ -531,6 +535,201 @@
 
     </div>
 
+    <!-- ============================================================= -->
+    <!-- VIEW 3: MARKETING INTELLIGENCE & ACTIVATION                   -->
+    <!-- ============================================================= -->
+    <div id="view-marketing" class="hidden p-6 max-w-7xl w-full mx-auto space-y-6">
+      
+      <!-- Top Banner -->
+      <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-5 shadow-lg flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded bg-sky-950 text-sky-400 border border-sky-800 text-[10px] font-mono font-bold uppercase">Marketing Focus</span>
+            <span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px] font-mono">100% Free Public Sources</span>
+          </div>
+          <h1 class="text-xl font-bold text-slate-100 mt-1">B2B Marketing Intelligence & Commercial Activation</h1>
+          <p class="text-xs text-slate-400 mt-0.5">Identify channels, formulate evidence-backed campaign briefs, model unit economics, and measure conversion.</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="showPipelineView()" class="px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition">
+            ← Back to Pipeline
+          </button>
+        </div>
+      </div>
+
+      <!-- Grid: Channel Discovery & Strategy Generator -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <!-- Panel 1: B2B Marketing Channel Discovery -->
+        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+              <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 100-6 3 3 0 000 6z"></path></svg>
+              <h2 class="text-sm font-bold text-slate-100">B2B Channel Discovery</h2>
+            </div>
+            <span class="text-[10px] text-slate-500 font-mono">Podcasts • Assocs • Press</span>
+          </div>
+
+          <!-- Channel Filter Controls -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <input id="market-filter-keyword" type="text" placeholder="Sector e.g. transport" value="commercial transport" class="bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500">
+            <select id="market-filter-type" class="bg-slate-950 border border-slate-800 rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500">
+              <option value="">All Channels</option>
+              <option value="PODCAST">Podcasts</option>
+              <option value="TRADE_ASSOCIATION">Trade Assocs</option>
+              <option value="PUBLICATION">Publications</option>
+              <option value="CONFERENCE">Conferences</option>
+            </select>
+            <button onclick="loadMarketingChannels()" class="px-3 py-1.5 rounded bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow transition">
+              Find Channels
+            </button>
+          </div>
+
+          <!-- Channels List Table -->
+          <div class="overflow-x-auto max-h-72 overflow-y-auto">
+            <table class="w-full text-left text-xs">
+              <thead class="text-[11px] text-slate-500 uppercase bg-slate-950/60 sticky top-0">
+                <tr>
+                  <th class="py-2 px-2.5 font-mono">Channel</th>
+                  <th class="py-2 px-2.5 font-mono">Type</th>
+                  <th class="py-2 px-2.5 font-mono">Audience</th>
+                  <th class="py-2 px-2.5 font-mono">Cost Tier</th>
+                </tr>
+              </thead>
+              <tbody id="market-channels-tbody" class="divide-y divide-slate-800/60">
+                <!-- Dynamically populated -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Panel 2: Campaign Strategy Generator -->
+        <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+              <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+              <h2 class="text-sm font-bold text-slate-100">Campaign Briefs & Creative Angles</h2>
+            </div>
+            <span class="text-[10px] text-emerald-400 font-mono font-semibold">PECR-Compliant</span>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <input id="market-strategy-crn" type="text" placeholder="UK CRN (e.g. 08931201)" value="08931201" class="bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs font-mono text-slate-200 focus:outline-none focus:border-emerald-500 w-32">
+            <input id="market-strategy-facility" type="number" placeholder="Facility (£)" value="350000" class="bg-slate-950 border border-slate-800 rounded px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-emerald-500 w-28">
+            <button onclick="generateMarketingStrategies()" class="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow transition">
+              Generate Briefs
+            </button>
+          </div>
+
+          <!-- Strategy Cards Container -->
+          <div id="market-strategies-container" class="space-y-3 max-h-72 overflow-y-auto pr-1">
+            <div class="p-4 rounded-lg bg-slate-950/40 border border-slate-800/80 text-center text-xs text-slate-500">
+              Enter a CRN and click "Generate Briefs" to synthesize evidence-backed B2B campaign concepts.
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Panel 3: Full-Funnel Commercial Economics & ROI Calculator -->
+      <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+            <h2 class="text-sm font-bold text-slate-100">Full-Funnel Economics & ROI Scenario Calculator</h2>
+          </div>
+          <span class="text-[10px] text-amber-400 font-mono font-semibold">Uncertainty Bounds</span>
+        </div>
+
+        <!-- Calculator Inputs -->
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-950/60 p-3 rounded-lg border border-slate-800">
+          <div>
+            <label class="text-[11px] text-slate-500 uppercase font-mono">Facility Size (£)</label>
+            <input id="econ-facility-size" type="number" value="350000" class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-200 mt-1">
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-500 uppercase font-mono">Campaign Spend (£)</label>
+            <input id="econ-campaign-spend" type="number" value="500" class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-200 mt-1">
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-500 uppercase font-mono">Cohort Reach</label>
+            <input id="econ-target-reach" type="number" value="1000" class="w-full bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-200 mt-1">
+          </div>
+          <div class="flex items-end">
+            <button onclick="calculateCampaignEconomics()" class="w-full py-1.5 rounded bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold shadow transition">
+              Run Scenarios
+            </button>
+          </div>
+        </div>
+
+        <!-- Scenarios Comparison Table -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="text-[11px] text-slate-500 uppercase bg-slate-950/60">
+              <tr>
+                <th class="py-2 px-3 font-mono">Metric</th>
+                <th class="py-2 px-3 font-mono text-slate-400">Conservative</th>
+                <th class="py-2 px-3 font-mono text-sky-400">Base Scenario</th>
+                <th class="py-2 px-3 font-mono text-emerald-400">Optimistic</th>
+              </tr>
+            </thead>
+            <tbody id="market-economics-tbody" class="divide-y divide-slate-800/60">
+              <tr>
+                <td colspan="4" class="py-4 text-center text-slate-500">Click "Run Scenarios" to evaluate commercial unit economics.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Decision Boundaries & Risk Note -->
+        <div id="market-economics-summary" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs border-t border-slate-800 pt-3">
+          <div class="p-3 bg-slate-950/60 rounded border border-slate-800">
+            <div class="text-[11px] text-slate-500 uppercase font-mono">Break-Even Response Rate</div>
+            <div id="econ-summary-be-rate" class="text-sm font-bold text-slate-200 mt-0.5">--</div>
+          </div>
+          <div class="p-3 bg-slate-950/60 rounded border border-slate-800">
+            <div class="text-[11px] text-slate-500 uppercase font-mono">Max Recommended Test Budget</div>
+            <div id="econ-summary-max-budget" class="text-sm font-bold text-emerald-400 mt-0.5">--</div>
+          </div>
+          <div class="p-3 bg-slate-950/60 rounded border border-slate-800">
+            <div class="text-[11px] text-slate-500 uppercase font-mono">Expected Net Value (Weighted)</div>
+            <div id="econ-summary-net-val" class="text-sm font-bold text-amber-400 mt-0.5">--</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel 4: Tracked Campaigns & Conversion Feedback -->
+      <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-5 shadow-lg space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+            <h2 class="text-sm font-bold text-slate-100">Campaign Tracking Ledger & Conversion Outcomes</h2>
+          </div>
+          <button onclick="loadTrackedCampaigns()" class="text-xs text-purple-400 hover:text-purple-300 font-mono">Refresh Ledger ⟳</button>
+        </div>
+
+        <div class="overflow-x-auto max-h-60 overflow-y-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="text-[11px] text-slate-500 uppercase bg-slate-950/60 sticky top-0">
+              <tr>
+                <th class="py-2 px-2.5 font-mono">Campaign ID</th>
+                <th class="py-2 px-2.5 font-mono">Channel</th>
+                <th class="py-2 px-2.5 font-mono">UTM Campaign</th>
+                <th class="py-2 px-2.5 font-mono">Budget</th>
+                <th class="py-2 px-2.5 font-mono">Status</th>
+              </tr>
+            </thead>
+            <tbody id="market-campaigns-tbody" class="divide-y divide-slate-800/60">
+              <tr>
+                <td colspan="5" class="py-3 text-center text-slate-500">No campaigns tracked yet. Issue tracking codes from generated briefs.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
   </main>
 
   <!-- ========================================== -->
@@ -554,13 +753,237 @@
     function showPipelineView() {
       document.getElementById("view-pipeline").classList.remove("hidden");
       document.getElementById("view-profile").classList.add("hidden");
+      const vMarket = document.getElementById("view-marketing");
+      if (vMarket) vMarket.classList.add("hidden");
       document.getElementById("nav-btn-dashboard").classList.add("border-sky-400", "text-sky-400", "bg-sky-950/60");
+      const nMarket = document.getElementById("nav-btn-marketing");
+      if (nMarket) nMarket.classList.remove("border-sky-400", "text-sky-400", "bg-sky-950/60");
     }
 
     function showProfileView() {
       document.getElementById("view-pipeline").classList.add("hidden");
       document.getElementById("view-profile").classList.remove("hidden");
+      const vMarket = document.getElementById("view-marketing");
+      if (vMarket) vMarket.classList.add("hidden");
       window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function showMarketingView() {
+      document.getElementById("view-pipeline").classList.add("hidden");
+      document.getElementById("view-profile").classList.add("hidden");
+      const vMarket = document.getElementById("view-marketing");
+      if (vMarket) vMarket.classList.remove("hidden");
+      const nDash = document.getElementById("nav-btn-dashboard");
+      if (nDash) nDash.classList.remove("border-sky-400", "text-sky-400", "bg-sky-950/60");
+      const nMarket = document.getElementById("nav-btn-marketing");
+      if (nMarket) nMarket.classList.add("border-sky-400", "text-sky-400", "bg-sky-950/60");
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      loadMarketingChannels();
+      loadTrackedCampaigns();
+    }
+
+    // --- Marketing Channel Discovery ---
+    async function loadMarketingChannels() {
+      const keyword = document.getElementById("market-filter-keyword").value.trim();
+      const type = document.getElementById("market-filter-type").value;
+      const tbody = document.getElementById("market-channels-tbody");
+      tbody.innerHTML = `<tr><td colspan="4" class="py-3 text-center text-slate-500">Searching verified channels...</td></tr>`;
+
+      try {
+        let url = `/api/v1/marketing/channels?limit=25`;
+        if (keyword) url += `&sector_keyword=${encodeURIComponent(keyword)}`;
+        if (type) url += `&channel_type=${encodeURIComponent(type)}`;
+
+        const res = await fetch(url);
+        const data = await res.json();
+        const channels = data.channels || [];
+
+        if (channels.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="4" class="py-3 text-center text-slate-500">No channels found for this filter.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = channels.map(c => `
+          <tr class="hover:bg-slate-800/40">
+            <td class="py-2 px-2.5">
+              <a href="${c.website_uri}" target="_blank" class="font-medium text-sky-400 hover:underline flex items-center gap-1">
+                ${c.channel_name}
+                <svg class="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+              </a>
+            </td>
+            <td class="py-2 px-2.5">
+              <span class="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] font-mono text-slate-300">${c.channel_type}</span>
+            </td>
+            <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">
+              <span class="px-1.5 py-0.2 rounded bg-slate-900 border border-slate-800 text-slate-400">${c.reach_metric_text}</span>
+            </td>
+            <td class="py-2 px-2.5 font-mono text-emerald-400 text-[11px]">${c.estimated_cost_tier}</td>
+          </tr>
+        `).join("");
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="4" class="py-3 text-center text-rose-400">Failed to load channels: ${err.message}</td></tr>`;
+      }
+    }
+
+    // --- Campaign Strategy Generation ---
+    async function generateMarketingStrategies() {
+      const crn = document.getElementById("market-strategy-crn").value.trim();
+      const facility = parseFloat(document.getElementById("market-strategy-facility").value) || 350000;
+      const container = document.getElementById("market-strategies-container");
+      container.innerHTML = `<div class="p-4 text-center text-xs text-slate-400">Synthesizing evidence-backed B2B campaign packs...</div>`;
+
+      try {
+        const res = await fetch(`/api/v1/marketing/strategies/generate/${crn}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ facility_size_gbp: facility })
+        });
+        const data = await res.json();
+        const strats = data.strategies || [];
+
+        if (strats.length === 0) {
+          container.innerHTML = `<div class="p-4 text-center text-xs text-slate-500">No strategies generated for CRN ${crn}.</div>`;
+          return;
+        }
+
+        container.innerHTML = strats.map(s => `
+          <div class="p-3.5 rounded-lg bg-slate-950/80 border border-slate-800 space-y-2 hover:border-slate-700 transition">
+            <div class="flex items-center justify-between">
+              <span class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px] font-mono font-bold">${s.segment_name}</span>
+              <span class="text-[10px] text-slate-500 font-mono">Target: ${s.target_role}</span>
+            </div>
+            <div class="text-xs font-bold text-slate-100">${s.campaign_headline}</div>
+            <div class="text-[11px] text-slate-300 italic bg-slate-900/60 p-2 rounded border border-slate-800/80">"${s.executive_message}"</div>
+            <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800/60 text-[11px]">
+              <span class="text-slate-400 font-mono">Channel: ${s.recommended_channel_name} (${s.content_format})</span>
+              <button onclick="issueCampaignTracking('${s.strategy_id}', '${s.recommended_channel_name.replace(/'/g, "\\'")}', '${s.recommended_channel_type}', '${s.content_format}', '${crn}')" class="px-2 py-1 rounded bg-purple-900/80 hover:bg-purple-800 text-purple-200 text-[10px] font-mono border border-purple-700 shadow">
+                + Issue Track Code
+              </button>
+            </div>
+          </div>
+        `).join("");
+        showToast(`Generated ${strats.length} campaign briefs!`, "success");
+      } catch (err) {
+        container.innerHTML = `<div class="p-4 text-center text-xs text-rose-400">Failed to generate briefs: ${err.message}</div>`;
+      }
+    }
+
+    // --- Campaign Economics Scenario Runner ---
+    async function calculateCampaignEconomics() {
+      const facility = parseFloat(document.getElementById("econ-facility-size").value) || 350000;
+      const spend = parseFloat(document.getElementById("econ-campaign-spend").value) || 0;
+      const reach = parseInt(document.getElementById("econ-target-reach").value) || 1000;
+      const tbody = document.getElementById("market-economics-tbody");
+      tbody.innerHTML = `<tr><td colspan="4" class="py-3 text-center text-slate-500">Calculating funnel economics...</td></tr>`;
+
+      try {
+        const res = await fetch("/api/v1/marketing/campaigns/plan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            facility_size_gbp: facility,
+            campaign_cost_gbp: spend,
+            target_reach: reach
+          })
+        });
+        const model = await res.json();
+        const sc = model.scenarios;
+        const cons = sc.CONSERVATIVE;
+        const base = sc.BASE;
+        const opt = sc.OPTIMISTIC;
+
+        tbody.innerHTML = `
+          <tr>
+            <td class="py-2 px-3 font-medium text-slate-300">Engagement Rate</td>
+            <td class="py-2 px-3 font-mono text-slate-400">${(cons.engagement_rate * 100).toFixed(1)}% (${cons.estimated_engagements} clicks)</td>
+            <td class="py-2 px-3 font-mono text-sky-400 font-bold">${(base.engagement_rate * 100).toFixed(1)}% (${base.estimated_engagements} clicks)</td>
+            <td class="py-2 px-3 font-mono text-emerald-400">${(opt.engagement_rate * 100).toFixed(1)}% (${opt.estimated_engagements} clicks)</td>
+          </tr>
+          <tr>
+            <td class="py-2 px-3 font-medium text-slate-300">Qualified Leads</td>
+            <td class="py-2 px-3 font-mono text-slate-400">${cons.estimated_qualified_leads} leads</td>
+            <td class="py-2 px-3 font-mono text-sky-400 font-bold">${base.estimated_qualified_leads} leads</td>
+            <td class="py-2 px-3 font-mono text-emerald-400">${opt.estimated_qualified_leads} leads</td>
+          </tr>
+          <tr>
+            <td class="py-2 px-3 font-medium text-slate-300">Funded Deals</td>
+            <td class="py-2 px-3 font-mono text-slate-400">${cons.estimated_funded_deals} deals</td>
+            <td class="py-2 px-3 font-mono text-sky-400 font-bold">${base.estimated_funded_deals} deals</td>
+            <td class="py-2 px-3 font-mono text-emerald-400">${opt.estimated_funded_deals} deals</td>
+          </tr>
+          <tr>
+            <td class="py-2 px-3 font-medium text-slate-300">Gross Broker Commission</td>
+            <td class="py-2 px-3 font-mono text-slate-400">£${cons.gross_commission_gbp.toLocaleString()}</td>
+            <td class="py-2 px-3 font-mono text-sky-400 font-bold">£${base.gross_commission_gbp.toLocaleString()}</td>
+            <td class="py-2 px-3 font-mono text-emerald-400">£${opt.gross_commission_gbp.toLocaleString()}</td>
+          </tr>
+          <tr class="bg-slate-950/40">
+            <td class="py-2 px-3 font-bold text-slate-200">Net Expected Return</td>
+            <td class="py-2 px-3 font-mono ${cons.net_value_gbp >= 0 ? 'text-slate-300' : 'text-rose-400'}">£${cons.net_value_gbp.toLocaleString()}</td>
+            <td class="py-2 px-3 font-mono text-sky-300 font-bold text-sm">£${base.net_value_gbp.toLocaleString()}</td>
+            <td class="py-2 px-3 font-mono text-emerald-300 font-bold">£${opt.net_value_gbp.toLocaleString()}</td>
+          </tr>
+        `;
+
+        const summaryEl = document.getElementById("market-economics-summary");
+        summaryEl.classList.remove("hidden");
+        document.getElementById("econ-summary-be-rate").textContent = `${(model.break_even_response_rate * 100).toFixed(2)}% response`;
+        document.getElementById("econ-summary-max-budget").textContent = `£${model.max_recommended_test_budget_gbp.toLocaleString()}`;
+        document.getElementById("econ-summary-net-val").textContent = `£${model.expected_net_value_gbp.toLocaleString()}`;
+
+        showToast("Economics scenario matrix updated!", "success");
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="4" class="py-3 text-center text-rose-400">Economics calculation failed: ${err.message}</td></tr>`;
+      }
+    }
+
+    // --- Campaign Tracking Ledger ---
+    async function issueCampaignTracking(strategyId, channelName, channelType, contentFormat, crn) {
+      try {
+        const res = await fetch("/api/v1/marketing/campaigns/track", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            strategy_id: strategyId,
+            channel_name: channelName,
+            channel_type: channelType,
+            content_format: contentFormat,
+            crn: crn,
+            budget_gbp: 0.0
+          })
+        });
+        const rec = await res.json();
+        showToast(`Tracking code issued: ${rec.campaign_id}`, "success");
+        await loadTrackedCampaigns();
+      } catch (err) {
+        showToast(`Failed to issue tracking code: ${err.message}`, "error");
+      }
+    }
+
+    async function loadTrackedCampaigns() {
+      const tbody = document.getElementById("market-campaigns-tbody");
+      try {
+        const res = await fetch("/api/v1/marketing/campaigns");
+        const data = await res.json();
+        const campaigns = data.campaigns || [];
+
+        if (campaigns.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" class="py-3 text-center text-slate-500">No campaigns tracked yet.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = campaigns.map(c => `
+          <tr class="hover:bg-slate-800/40">
+            <td class="py-2 px-2.5 font-mono text-purple-400 font-semibold">${c.campaign_id}</td>
+            <td class="py-2 px-2.5 font-medium text-slate-200">${c.channel_name}</td>
+            <td class="py-2 px-2.5 font-mono text-slate-400 text-[11px]">${c.utm_campaign}</td>
+            <td class="py-2 px-2.5 font-mono text-slate-300">£${c.budget_gbp.toFixed(2)}</td>
+            <td class="py-2 px-2.5"><span class="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px] font-mono">${c.status}</span></td>
+          </tr>
+        `).join("");
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-3 text-center text-rose-400">Failed to load campaigns: ${err.message}</td></tr>`;
+      }
     }
 
     function togglePitchDrawer() {

@@ -349,3 +349,87 @@ class MarketingChannelDiscoveryService:
             "conferences_count": len(conferences),
             "channels": all_channels,
         }
+
+    def discover_channels(
+        self,
+        sic_codes: Optional[Sequence[str]] = None,
+        sector_keyword: Optional[str] = None,
+        channel_type: Optional[str] = None,
+        limit: int = 20,
+    ) -> List[MarketingChannelCandidate]:
+        """
+        Synchronously discovers and returns verified marketing channel candidates.
+        Ensures catalog items are seeded in DB and applies filters.
+        """
+        sic_list = list(sic_codes) if sic_codes else ["49", "25", "41", "46", "62"]
+
+        if self.db:
+            # Seed catalog if DB is empty
+            count = self.db.query(MarketingChannelCandidate).count()
+            if count == 0:
+                seed_channels = (
+                    self.get_trade_associations(sic_list)
+                    + self.get_trade_publications(sic_list)
+                    + self.get_conferences_and_events(sic_list)
+                )
+                for c in seed_channels:
+                    rec = MarketingChannelCandidate(
+                        channel_name=c["channel_name"],
+                        channel_type=c["channel_type"],
+                        sector_sic_prefixes=c.get("sector_sic_prefixes", ",".join(sic_list)),
+                        target_audience_role=c.get("target_audience_role", "Finance Director"),
+                        website_uri=c["website_uri"],
+                        feed_uri=c.get("feed_uri"),
+                        reach_metric_text=c.get("reach_metric_text", "UNOBSERVED"),
+                        is_reach_verified=c.get("is_reach_verified", False),
+                        commercial_opportunity_type=c.get("commercial_opportunity_type", "EDITORIAL_PR"),
+                        estimated_cost_tier=c.get("estimated_cost_tier", "LOW"),
+                        confidence_score=c.get("confidence_score", 0.85),
+                        source_reference=c.get("source_reference", "catalog"),
+                    )
+                    self.db.add(rec)
+                self.db.commit()
+
+            q = self.db.query(MarketingChannelCandidate)
+            if channel_type:
+                q = q.filter(MarketingChannelCandidate.channel_type == channel_type)
+            if sector_keyword:
+                kw = f"%{sector_keyword.lower()}%"
+                q = q.filter(
+                    (MarketingChannelCandidate.channel_name.ilike(kw))
+                    | (MarketingChannelCandidate.sector_sic_prefixes.ilike(kw))
+                    | (MarketingChannelCandidate.source_reference.ilike(kw))
+                )
+            results = q.limit(limit).all()
+            if results:
+                return results
+
+        # Fallback in-memory objects if DB is None or empty after filter
+        catalog = (
+            self.get_trade_associations(sic_list)
+            + self.get_trade_publications(sic_list)
+            + self.get_conferences_and_events(sic_list)
+        )
+        candidates = []
+        for i, c in enumerate(catalog, start=1):
+            if channel_type and c["channel_type"] != channel_type:
+                continue
+            candidates.append(
+                MarketingChannelCandidate(
+                    id=i,
+                    channel_name=c["channel_name"],
+                    channel_type=c["channel_type"],
+                    sector_sic_prefixes=c.get("sector_sic_prefixes", ",".join(sic_list)),
+                    target_audience_role=c.get("target_audience_role", "Finance Director"),
+                    website_uri=c["website_uri"],
+                    feed_uri=c.get("feed_uri"),
+                    reach_metric_text=c.get("reach_metric_text", "UNOBSERVED"),
+                    is_reach_verified=c.get("is_reach_verified", False),
+                    commercial_opportunity_type=c.get("commercial_opportunity_type", "EDITORIAL_PR"),
+                    estimated_cost_tier=c.get("estimated_cost_tier", "LOW"),
+                    confidence_score=c.get("confidence_score", 0.85),
+                    source_reference=c.get("source_reference", "catalog"),
+                )
+            )
+        return candidates[:limit]
+
