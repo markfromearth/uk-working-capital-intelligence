@@ -9,7 +9,9 @@ from typing import Any, Dict, List, Optional, Sequence
 import httpx
 from sqlalchemy.orm import Session
 
+from backend.app.config import settings
 from backend.app.core.logging import logger
+from backend.app.core.ssrf_protection import SafeHttpClient, validate_safe_url
 from backend.app.models.marketing import (
     MarketingChannelCandidate,
     MarketingChannelType,
@@ -153,7 +155,8 @@ class MarketingChannelDiscoveryService:
 
     async def search_podcasts(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
         """
-        Queries official Apple iTunes Search API for public UK business/finance podcasts.
+        Queries official Apple iTunes Search API for public UK business/finance podcasts
+        via the central SSRF-hardened SafeHttpClient.
         Zero cost, no authentication required.
         """
         url = "https://itunes.apple.com/search"
@@ -162,39 +165,55 @@ class MarketingChannelDiscoveryService:
             "media": "podcast",
             "entity": "podcast",
             "country": "GB",
-            "limit": limit,
+            "limit": str(limit),
         }
+        now_iso = datetime.now(timezone.utc).isoformat()
         try:
-            async with httpx.AsyncClient(timeout=8.0) as client:
-                resp = await client.get(url, params=params)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    results: List[Dict[str, Any]] = []
-                    for item in data.get("results", []):
-                        name = item.get("collectionName", "Unknown Podcast")
-                        artist = item.get("artistName", "Broadcaster")
-                        track_url = item.get("collectionViewUrl", "")
-                        feed_url = item.get("feedUrl", "")
-                        results.append({
-                            "channel_name": f"{name} (by {artist})",
-                            "channel_type": MarketingChannelType.PODCAST.value,
-                            "website_uri": track_url,
-                            "feed_uri": feed_url,
-                            "reach_metric_text": "UNOBSERVED",  # Never fabricate downloads
-                            "is_reach_verified": False,
-                            "commercial_opportunity_type": CommercialOpportunityType.GUEST_APPEARANCE.value,
-                            "estimated_cost_tier": "FREE_EDITORIAL",
-                            "confidence_score": 0.85,
-                            "source_reference": f"itunes_podcast_search:{query}",
-                        })
-                    return results
+            safe_client = SafeHttpClient(
+                timeout_seconds=8.0,
+                max_redirects=2,
+                max_response_bytes=1024 * 1024,
+                allow_http=False,
+            )
+            resp = await safe_client.get(url, params=params)
+            if resp.status_code == 200:
+                data = resp.json()
+                results: List[Dict[str, Any]] = []
+                for item in data.get("results", []):
+                    name = item.get("collectionName", "Unknown Podcast")
+                    artist = item.get("artistName", "Broadcaster")
+                    track_url = item.get("collectionViewUrl", "")
+                    feed_url = item.get("feedUrl", "")
+                    if track_url and not validate_safe_url(track_url, resolve_dns=False)[0]:
+                        continue
+                    if feed_url and not validate_safe_url(feed_url, resolve_dns=False)[0]:
+                        feed_url = ""
+                    results.append({
+                        "channel_name": f"{name} (by {artist})",
+                        "channel_type": MarketingChannelType.PODCAST.value,
+                        "website_uri": track_url,
+                        "feed_uri": feed_url,
+                        "reach_metric_text": "UNOBSERVED",  # Never fabricate downloads
+                        "is_reach_verified": False,
+                        "commercial_opportunity_type": CommercialOpportunityType.GUEST_APPEARANCE.value,
+                        "estimated_cost_tier": "FREE_EDITORIAL",
+                        "confidence_score": 0.85,
+                        "source_reference": f"itunes_podcast_search:{query}",
+                        "provenance_mode": "LIVE",
+                        "verification_status": "verified_public_directory",
+                        "retrieval_timestamp": now_iso,
+                    })
+                return results
         except Exception as e:
             logger.warning(f"iTunes podcast discovery failed for '{query}': {e}")
 
-        # Deterministic fallback for test/offline environments
+        # Only return synthetic fallback if DEMO_MODE is explicitly enabled, and label it SIMULATED
+        if not settings.DEMO_MODE:
+            return []
+
         return [
             {
-                "channel_name": f"The UK Business & Finance Show ({query.title()})",
+                "channel_name": f"[SIMULATED] The UK Business & Finance Show ({query.title()})",
                 "channel_type": MarketingChannelType.PODCAST.value,
                 "website_uri": "https://podcasts.apple.com/gb/podcast/uk-business-finance",
                 "feed_uri": "https://feeds.example.com/uk-business-finance.xml",
@@ -202,8 +221,11 @@ class MarketingChannelDiscoveryService:
                 "is_reach_verified": False,
                 "commercial_opportunity_type": CommercialOpportunityType.GUEST_APPEARANCE.value,
                 "estimated_cost_tier": "FREE_EDITORIAL",
-                "confidence_score": 0.80,
-                "source_reference": f"verified_uk_business_podcast_catalog:{query}",
+                "confidence_score": 0.50,
+                "source_reference": f"simulated_fallback_podcast_catalog:{query}",
+                "provenance_mode": "SIMULATED",
+                "verification_status": "simulated",
+                "retrieval_timestamp": now_iso,
             }
         ]
 

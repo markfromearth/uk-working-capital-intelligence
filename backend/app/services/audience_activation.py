@@ -102,7 +102,8 @@ class AudienceActivationService:
             compliance_approval_status="pending_compliance_review",
             execution_status="pending",
             suppression_cleared=False,
-            asserts_financial_distress=False
+            asserts_financial_distress=False,
+            requester_user_id=requester_user_id,
         )
 
         self.db.add(activation)
@@ -218,13 +219,34 @@ class AudienceActivationService:
         if activation.asserts_financial_distress:
             raise ValueError("Fail-closed: Prohibited targeting asserting financial distress.")
 
-        # Re-check suppression at execution time
+        # Re-check suppression at execution time (Person, CRN, Full Name + CRN)
+        supp_identifiers = [activation.crn.lower()]
         if activation.person_id:
             person = self.db.query(PersonIdentity).filter(PersonIdentity.person_id == activation.person_id).first()
-            if person and (person.is_erased or person.is_suppressed):
-                activation.execution_status = "suppressed"
-                self.db.commit()
-                raise ValueError("Fail-closed: Target person exercised Right to Erasure / Objection prior to execution.")
+            if person:
+                supp_identifiers.extend([
+                    person.person_id.lower(),
+                    person.normalized_name.lower(),
+                    f"{person.normalized_name.lower()}:{activation.crn.lower()}",
+                ])
+                if person.is_erased or person.is_suppressed:
+                    activation.execution_status = "suppressed"
+                    activation.suppression_cleared = False
+                    self.db.commit()
+                    raise ValueError("Fail-closed: Target person exercised Right to Erasure / Objection prior to execution.")
+
+        from sqlalchemy import func as sa_func
+        supp_hit = self.db.query(SuppressionRecord).filter(
+            SuppressionRecord.is_active == True,
+            sa_func.lower(SuppressionRecord.identifier_value).in_(supp_identifiers)
+        ).first()
+        if supp_hit:
+            activation.execution_status = "suppressed"
+            activation.suppression_cleared = False
+            self.db.commit()
+            raise ValueError(
+                f"Fail-closed: Target company or contact added to suppression registry prior to execution ({supp_hit.suppression_reason})."
+            )
 
         activation.execution_status = "active"
         activation.executed_at = datetime.now(timezone.utc)

@@ -5,10 +5,12 @@ Zero simulated data generation: only returns genuine retrieved statutory documen
 """
 
 from typing import Any, Dict, List, Optional, Tuple
+from urllib.parse import urljoin
 import httpx
 
 from backend.app.config import settings
 from backend.app.core.logging import logger
+from backend.app.core.ssrf_protection import validate_safe_url
 
 
 class AccountsFetcher:
@@ -52,24 +54,38 @@ class AccountsFetcher:
         if not self._is_live:
             return None, None
 
-        content_url = f"{document_metadata_url}/content"
+        content_url = f"{document_metadata_url.rstrip('/')}/content"
+        is_safe, reason = validate_safe_url(content_url, resolve_dns=True, allow_http=False)
+        if not is_safe:
+            logger.error(f"SSRF boundary blocked document_metadata_url '{content_url}': {reason}")
+            return None, None
+
         auth = httpx.BasicAuth(self.api_key, "")
         headers = {"Accept": "application/xhtml+xml, application/pdf"}
 
         # Step 1: Request with follow_redirects=False to inspect redirect target
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.get(content_url, auth=auth, headers=headers, follow_redirects=False)
+            async with httpx.AsyncClient(timeout=10.0, trust_env=False, follow_redirects=False) as client:
+                resp = await client.get(content_url, auth=auth, headers=headers)
 
-                if resp.status_code in (301, 302, 303, 307):
+                if resp.status_code in (301, 302, 303, 307, 308):
                     redirect_target = resp.headers.get("Location")
                     if not redirect_target:
                         logger.error("CH Document API returned redirect status without Location header")
                         return None, None
 
+                    resolved_redirect = urljoin(content_url, redirect_target)
+                    redir_safe, redir_reason = validate_safe_url(resolved_redirect, resolve_dns=True, allow_http=False)
+                    if not redir_safe:
+                        logger.error(f"SSRF boundary blocked S3 redirect target '{resolved_redirect}': {redir_reason}")
+                        return None, None
+
                     # Step 2: Request redirect target WITHOUT the Authorization header
-                    s3_resp = await client.get(redirect_target, follow_redirects=True)
+                    s3_resp = await client.get(resolved_redirect)
                     if s3_resp.status_code == 200:
+                        if len(s3_resp.content) > 15 * 1024 * 1024:
+                            logger.error("S3 document exceeds 15 MB size limit")
+                            return None, None
                         c_type = s3_resp.headers.get("Content-Type", "application/pdf")
                         return s3_resp.content, c_type
                     else:

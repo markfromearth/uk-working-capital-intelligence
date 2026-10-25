@@ -302,8 +302,219 @@ class IdentityResolutionService:
         }
 
     # =========================================================================
-    # PECR CORPORATE SUBSCRIBER VALIDATION (Phase 10 & 11)
+    # PECR CORPORATE SUBSCRIBER & UK GDPR VALIDATION (Phase 3)
     # =========================================================================
+
+    CORPORATE_SUBSCRIBER_TYPES = {
+        "ltd",
+        "limited",
+        "private-limited-company",
+        "private-limited-guarant-nsc",
+        "private-limited-guarant-nsc-limited-exemption",
+        "private-limited-guarant-nfs-limited-exemption",
+        "private-limited-shares-section-30-exemption",
+        "private-unlimited",
+        "private-unlimited-nsc",
+        "plc",
+        "public-limited-company",
+        "llp",
+        "limited-liability-partnership",
+        "scottish-partnership",  # Separate legal personality under Partnership Act 1890 s.4(2) (Scotland)
+        "scottish-limited-partnership",
+        "registered-society-non-jurisdictional",
+        "industrial-and-provident-society",
+        "community-interest-company",
+        "cic",
+        "royal-charter",
+        "charitable-incorporated-organisation",
+        "scottish-charitable-incorporated-organisation",
+        "uk-establishment",
+    }
+
+    INDIVIDUAL_SUBSCRIBER_TYPES = {
+        "sole-trader",
+        "sole-proprietor",
+        "individual",
+        "partnership",
+        "general-partnership",
+        "english-partnership",
+        "limited-partnership",  # English/Welsh LP lacks separate legal personality
+        "unincorporated-association",
+    }
+
+    OUT_OF_SCOPE_NON_UK_TYPES = {
+        "oversea-company",
+        "foreign-entity",
+        "non-uk",
+        "other-jurisdiction",
+    }
+
+    @classmethod
+    def evaluate_pecr_uk_gdpr_compliance(
+        cls,
+        company_type: Optional[str] = None,
+        crn: Optional[str] = None,
+        has_prior_opt_in_consent: bool = False,
+        sender_identity_disclosed: bool = True,
+        valid_opt_out_address_provided: bool = True,
+        is_suppressed: bool = False,
+        suppression_reason: Optional[str] = None,
+        channel_mode: str = "electronic_mail",
+    ) -> Dict[str, Any]:
+        """
+        Produces a structured, versioned PECR 2003 & UK GDPR compliance decision record.
+        Enforces:
+        1. Fail-closed handling of missing, empty, or unknown company_type (never defaults to 'ltd').
+        2. PECR Regulation 22: Prohibits unsolicited electronic mail to individual subscribers
+           (sole traders, English/Welsh general partnerships, unincorporated bodies) without
+           verifiable prior opt-in consent; corporate subscribers (Ltd, PLC, LLP, Scottish partnerships)
+           are exempt from Reg 22's prior opt-in requirement.
+        3. PECR Regulation 23: Applies to ALL unsolicited direct marketing electronic mail
+           (including corporate subscribers)—sender identity must not be disguised/concealed
+           and a valid opt-out address must be provided.
+        4. UK GDPR Article 6(1)(f) (Legitimate Interests) or 6(1)(a) (Consent) & Article 21
+           absolute right to object to direct marketing.
+        """
+        checked_at = datetime.now(timezone.utc).isoformat()
+        decision_base = {
+            "rule_version": "pecr-ukgdpr-v2.0",
+            "checked_at": checked_at,
+            "crn": crn,
+            "channel_mode": channel_mode,
+            "sender_identity_disclosed": sender_identity_disclosed,
+            "valid_opt_out_address_provided": valid_opt_out_address_provided,
+            "suppression_checked": True,
+            "is_suppressed": is_suppressed,
+        }
+
+        if is_suppressed:
+            return {
+                **decision_base,
+                "is_permissible": False,
+                "subscriber_classification": "SUPPRESSED",
+                "status_code": "SUPPRESSED_OR_OBJECTED_BLOCKED",
+                "legal_basis": "UK GDPR Article 21(2)-(3) Absolute Right to Object / PECR Opt-Out",
+                "pecr_reg_22_status": "BLOCKED_BY_SUPPRESSION",
+                "pecr_reg_23_status": "OPT_OUT_ENFORCED",
+                "rationale": (
+                    f"Direct marketing is strictly prohibited: target matches active suppression/objection "
+                    f"record ({suppression_reason or 'UK GDPR Art 21 / PECR opt-out'})."
+                ),
+            }
+
+        if not sender_identity_disclosed or not valid_opt_out_address_provided:
+            return {
+                **decision_base,
+                "is_permissible": False,
+                "subscriber_classification": "UNVERIFIED",
+                "status_code": "PECR_REG_23_IDENTIFICATION_OR_OPT_OUT_MISSING",
+                "legal_basis": "PECR 2003 Regulation 23 Mandatory Sender Identification & Opt-Out",
+                "pecr_reg_22_status": "NOT_EVALUATED",
+                "pecr_reg_23_status": "VIOLATION_BLOCKED",
+                "rationale": (
+                    "PECR Regulation 23 prohibits unsolicited electronic marketing mail that conceals "
+                    "the sender's identity or omits a valid address for opt-out requests."
+                ),
+            }
+
+        if not company_type or not str(company_type).strip():
+            return {
+                **decision_base,
+                "is_permissible": False,
+                "subscriber_classification": "UNKNOWN",
+                "status_code": "UNKNOWN_SUBSCRIBER_STATUS_BLOCKED",
+                "legal_basis": "PECR 2003 Regulation 22 Fail-Closed Guard",
+                "pecr_reg_22_status": "BLOCKED_UNVERIFIED_SUBSCRIBER",
+                "pecr_reg_23_status": "COMPLIANT",
+                "rationale": (
+                    "Fail-closed compliance block: Entity legal form (company_type) is missing or unverified. "
+                    "Cannot assume Corporate Subscriber status without statutory evidence."
+                ),
+            }
+
+        clean_type = str(company_type).strip().lower().replace("_", "-").replace(" ", "-")
+
+        if clean_type in cls.OUT_OF_SCOPE_NON_UK_TYPES:
+            return {
+                **decision_base,
+                "is_permissible": False,
+                "subscriber_classification": "OUT_OF_SCOPE_NON_UK",
+                "status_code": "OUT_OF_SCOPE_JURISDICTION_BLOCKED",
+                "legal_basis": "Jurisdiction Boundary (UK Corporate Registry Only)",
+                "pecr_reg_22_status": "OUT_OF_SCOPE",
+                "pecr_reg_23_status": "OUT_OF_SCOPE",
+                "rationale": (
+                    f"Entity type '{clean_type}' is outside the verified UK corporate subscriber scope."
+                ),
+            }
+
+        if clean_type in cls.CORPORATE_SUBSCRIBER_TYPES:
+            return {
+                **decision_base,
+                "is_permissible": True,
+                "subscriber_classification": "CORPORATE_SUBSCRIBER",
+                "status_code": "CORPORATE_SUBSCRIBER_EXEMPT",
+                "legal_basis": (
+                    "PECR 2003 Regulation 22 Corporate Subscriber Distinction; "
+                    "PECR Regulation 23 Sender Identification & Opt-Out; "
+                    "UK GDPR Article 6(1)(f) Legitimate Interests"
+                ),
+                "pecr_reg_22_status": "EXEMPT_CORPORATE_SUBSCRIBER",
+                "pecr_reg_23_status": "COMPLIANT_IDENTITY_AND_OPT_OUT_REQUIRED",
+                "rationale": (
+                    f"Entity '{clean_type}' is a verified UK corporate subscriber with separate legal personality. "
+                    "Exempt from PECR Reg 22 prior opt-in requirement; compliant with PECR Reg 23 sender identification "
+                    "and opt-out address requirements under UK GDPR Art 6(1)(f) Legitimate Interests."
+                ),
+            }
+
+        if clean_type in cls.INDIVIDUAL_SUBSCRIBER_TYPES:
+            if has_prior_opt_in_consent:
+                return {
+                    **decision_base,
+                    "is_permissible": True,
+                    "subscriber_classification": "INDIVIDUAL_SUBSCRIBER",
+                    "status_code": "OPT_IN_CONSENT_VERIFIED",
+                    "legal_basis": (
+                        "PECR 2003 Regulation 22(2) Prior Opt-In Consent; "
+                        "PECR Regulation 23 Sender Identification & Opt-Out; "
+                        "UK GDPR Article 6(1)(a) Explicit Consent"
+                    ),
+                    "pecr_reg_22_status": "COMPLIANT_PRIOR_CONSENT_RECORDED",
+                    "pecr_reg_23_status": "COMPLIANT_IDENTITY_AND_OPT_OUT_REQUIRED",
+                    "rationale": (
+                        f"Individual subscriber entity '{clean_type}' has verifiable prior opt-in consent "
+                        "recorded under PECR Regulation 22 and UK GDPR Article 6(1)(a)."
+                    ),
+                }
+            return {
+                **decision_base,
+                "is_permissible": False,
+                "subscriber_classification": "INDIVIDUAL_SUBSCRIBER",
+                "status_code": "NON_CORPORATE_REQUIRES_OPT_IN",
+                "legal_basis": "PECR 2003 Regulation 22 Prohibition (Individual Subscriber)",
+                "pecr_reg_22_status": "VIOLATION_BLOCKED",
+                "pecr_reg_23_status": "COMPLIANT",
+                "rationale": (
+                    f"Entity '{clean_type}' is classified as an individual subscriber (sole trader / unincorporated partnership). "
+                    "Direct electronic marketing is prohibited under PECR Regulation 22 without recorded prior opt-in consent."
+                ),
+            }
+
+        # Any unrecognised company_type fails closed
+        return {
+            **decision_base,
+            "is_permissible": False,
+            "subscriber_classification": "AMBIGUOUS_OR_UNKNOWN",
+            "status_code": "UNKNOWN_SUBSCRIBER_STATUS_BLOCKED",
+            "legal_basis": "PECR 2003 Regulation 22 Fail-Closed Guard",
+            "pecr_reg_22_status": "BLOCKED_AMBIGUOUS_ENTITY_TYPE",
+            "pecr_reg_23_status": "COMPLIANT",
+            "rationale": (
+                f"Fail-closed compliance block: Entity legal form '{clean_type}' is not in the verified "
+                "UK corporate subscriber allowlist. Direct electronic marketing blocked."
+            ),
+        }
 
     @classmethod
     def validate_corporate_subscriber_status(
@@ -311,54 +522,31 @@ class IdentityResolutionService:
         company_type: Optional[str] = None,
         crn: Optional[str] = None,
         has_prior_opt_in_consent: bool = False,
+        sender_identity_disclosed: bool = True,
+        valid_opt_out_address_provided: bool = True,
     ) -> Tuple[bool, str, str, str]:
         """
-        Validates whether target is a UK Corporate Subscriber under PECR 2003 Regulation 23.
-        Corporate bodies (Ltd, PLC, LLP, Scottish LP) permit B2B marketing via Legitimate Interests.
-        Individual subscribers (sole traders, unincorporated partnerships) strictly require prior opt-in consent (Reg 22).
+        Validates whether target is a UK Corporate Subscriber under PECR 2003 Regulation 22 & 23.
+        Corporate bodies (Ltd, PLC, LLP, Scottish partnerships) are exempt from PECR Reg 22 prior opt-in
+        and may receive B2B marketing under UK GDPR Art 6(1)(f) Legitimate Interests provided PECR Reg 23
+        (sender identity and valid opt-out address) is satisfied.
+        Individual subscribers (sole traders, English/Welsh unincorporated partnerships) strictly require
+        prior opt-in consent under PECR Reg 22.
+        Unknown or missing company_type fails closed (never defaults to 'ltd').
 
         Returns: (is_permissible, status_code, legal_basis, rationale)
         """
-        corporate_types = {
-            "ltd",
-            "limited",
-            "private-limited-company",
-            "private-limited-guarant-nfs-limited-exemption",
-            "plc",
-            "public-limited-company",
-            "llp",
-            "limited-liability-partnership",
-            "scottish-partnership",
-            "scottish-limited-partnership",
-            "registered-society-non-jurisdictional",
-            "community-interest-company",
-            "cic",
-            "royal-charter",
-        }
-
-        clean_type = (company_type or "ltd").strip().lower().replace("_", "-")
-
-        if clean_type in corporate_types:
-            return (
-                True,
-                "CORPORATE_SUBSCRIBER_EXEMPT",
-                "PECR Regulation 23 / GDPR Art 6(1)(f) Legitimate Interests",
-                f"Entity '{clean_type}' is a verified corporate body; direct B2B marketing permissible with opt-out.",
-            )
-
-        # Non-corporate subscriber (sole trader or unincorporated entity)
-        if has_prior_opt_in_consent:
-            return (
-                True,
-                "OPT_IN_CONSENT_VERIFIED",
-                "PECR Regulation 22 / GDPR Art 6(1)(a) Explicit Consent",
-                f"Non-corporate entity '{clean_type}' has verifiable prior opt-in consent on record.",
-            )
-
+        decision = cls.evaluate_pecr_uk_gdpr_compliance(
+            company_type=company_type,
+            crn=crn,
+            has_prior_opt_in_consent=has_prior_opt_in_consent,
+            sender_identity_disclosed=sender_identity_disclosed,
+            valid_opt_out_address_provided=valid_opt_out_address_provided,
+        )
         return (
-            False,
-            "NON_CORPORATE_REQUIRES_OPT_IN",
-            "PECR Regulation 22 Violation Risk",
-            f"Entity '{clean_type}' is classified as an individual subscriber. Direct electronic marketing prohibited without recorded opt-in consent.",
+            decision["is_permissible"],
+            decision["status_code"],
+            decision["legal_basis"],
+            decision["rationale"],
         )
 
